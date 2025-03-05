@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from transformers import ViTModel
@@ -83,3 +84,81 @@ class SimpleCNN2c2d(nn.Module):
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
         return F.log_softmax(x, dim=1)
+
+
+class ConvVAE(nn.Module):
+    def __init__(self, input_dims, latent_dim):
+        super(ConvVAE, self).__init__()
+        self.H, self.W, self.channels = input_dims
+
+        # Encoder
+        self.encoder = nn.Sequential(
+            nn.Conv2d(self.channels, 32, kernel_size=3, stride=2, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1),
+            nn.ReLU()
+        )
+
+        # Calculate the size of the flattened feature map
+        self.fc_dims_H = np.floor((self.H + 2*1 - 3) / 2 + 1).astype(int)
+        self.fc_dims_H  = np.floor((self.fc_dims_H  + 2*1 - 3) / 2 + 1).astype(int)
+        self.fc_dims_H  = np.floor((self.fc_dims_H  + 2*1 - 3) / 2 + 1).astype(int)
+        self.fc_dims_H  = np.floor((self.fc_dims_H  + 2*1 - 3) / 2 + 1).astype(int)
+
+        self.fc_dims_W = np.floor((self.W + 2*1 - 3) / 2 + 1).astype(int)
+        self.fc_dims_W  = np.floor((self.fc_dims_W  + 2*1 - 3) / 2 + 1).astype(int)
+        self.fc_dims_W  = np.floor((self.fc_dims_W  + 2*1 - 3) / 2 + 1).astype(int)
+        self.fc_dims_W  = np.floor((self.fc_dims_W  + 2*1 - 3) / 2 + 1).astype(int)
+
+
+        self.fc1 = nn.Linear(256 * self.fc_dims_H  * self.fc_dims_W , 512)
+        self.fc_mu = nn.Linear(512, latent_dim)
+        self.fc_logvar = nn.Linear(512, latent_dim)
+
+
+        # Decoder
+        self.fc2 = nn.Linear(latent_dim, 512)
+        self.fc3 = nn.Linear(512, 256 * self.fc_dims_H  * self.fc_dims_W )
+        #H_out =(H_in −1)×stride−2×padding+kernel_size+output_padding
+        # this was done especificatlly for minset, if a new dataset was added, thing might need to change
+        # if input changes from 28 to 32, just change the output_padding from zero to in second ConvTranspose2d
+        self.decoder = nn.Sequential(
+            nn.ConvTranspose2d(256, 128, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.ReLU(),
+            nn.ConvTranspose2d(128, 64, kernel_size=3, stride=2, padding=1, output_padding=0),
+            nn.ReLU(),
+            nn.ConvTranspose2d(64, 32, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.ReLU(),
+        nn.ConvTranspose2d(32, self.channels, kernel_size=3, stride=2, padding=1, output_padding=1),  
+            nn.Sigmoid()
+        )
+
+    def encode(self, x):
+        x = self.encoder(x)
+        x = x.view(x.size(0), -1)  # Flatten the tensor
+        x = F.relu(self.fc1(x))
+        mu = self.fc_mu(x)
+        logvar = self.fc_logvar(x)
+        return mu, logvar
+
+    def reparameterize(self, mu, logvar):
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+
+    def decode(self, z):
+        x = F.relu(self.fc2(z))
+        x = F.relu(self.fc3(x))
+        x = x.view(x.size(0), 256, self.fc_dims_H , self.fc_dims_W )
+        x = self.decoder(x)
+        return x
+
+    def forward(self, x):
+        mu, logvar = self.encode(x)
+        z = self.reparameterize(mu, logvar)
+        recon_x = self.decode(z)
+        return recon_x, mu, logvar

@@ -11,33 +11,21 @@ from privacy_engines.KFprivacy_engine import KF_PrivacyEngine
 from opacus.accountants.utils import get_noise_multiplier
 class Training:
 
-    @staticmethod
-    def train(optimizer_type,
-              model,
-              train_loader, 
-              learning_rate, 
-              sample_rate, 
-              criterion, 
-              num_epochs, 
-              target_epsilon, 
-              clip_bound, 
-              delta, 
-              device, 
-              verbose=False, 
-              **kwargs):
-        optimizer_type = optimizer_type.upper()
-        if optimizer_type == 'SGD':
-            return Training.private_train_epsilon(model, train_loader,  learning_rate, sample_rate, criterion, num_epochs, target_epsilon, clip_bound, delta, device, verbose=verbose, **kwargs)
-        elif optimizer_type == 'Dice':
-            return Training.DP_Dice_train_epsilon(model, train_loader,  learning_rate, sample_rate, criterion, num_epochs, target_epsilon, clip_bound, delta, device, verbose=verbose, **kwargs)
-        elif optimizer_type == 'Adam':
-            return Training.DP_AdamBC_train_epsilon(model, train_loader,  learning_rate, sample_rate, criterion, num_epochs, target_epsilon, clip_bound, delta, device, verbose=verbose, **kwargs)
-        elif optimizer_type == 'KF':
-            return Training.DP_KF_train_epsilon(model, train_loader,  learning_rate, sample_rate, criterion, num_epochs, target_epsilon, clip_bound, delta, device, verbose=verbose, **kwargs)
-        else:
-            raise ValueError(f"Unsupported optimizer type: {optimizer_type}")
+
     @staticmethod 
-    def training_loop(num_epochs, train_loader, model, criterion, optimizer, device, verbose=False, use_closure=False):
+    def training_loop(model_type,num_epochs, train_loader, model, criterion, optimizer, device, verbose=False, use_closure=False):
+        all_losses = []
+        all_accuracies = []
+        if model_type.lower() == 'classification':
+            all_losses,all_accuracies = Training.classification_training_loop(num_epochs,train_loader,model,criterion,optimizer,device,verbose=verbose,use_closure=use_closure)
+
+        elif model_type.lower() == 'vae':
+            all_losses = Training.VAE_training_loop(num_epochs,train_loader,model,criterion,optimizer,device,verbose=verbose,use_closure=use_closure)
+        else:
+            raise ValueError("Unsupported model type")
+        return all_losses, all_accuracies
+    @staticmethod 
+    def classification_training_loop(num_epochs, train_loader, model, criterion, optimizer, device, verbose=False, use_closure=False):
         all_losses = []
         all_accuracies = []
         model.to(device)
@@ -72,12 +60,70 @@ class Training:
             all_losses.append(epoch_losses)
             all_accuracies.append(epoch_accuracies)
             if verbose:
-                print(f"Epoch {epoch + 1}, loss = {torch.sum(torch.tensor(epoch_losses)) / len(train_loader)}, accuracy = {torch.mean(torch.tensor(epoch_accuracies))}")
+                print(f"Epoch {epoch + 1}, loss = {torch.mean(torch.tensor(epoch_losses)) }, accuracy = {torch.mean(torch.tensor(epoch_accuracies))}")
 
         return all_losses, all_accuracies
     
+    @staticmethod
+    def VAE_training_loop(num_epochs, train_loader, model, criterion, optimizer, device, verbose=False, use_closure=False):
+        all_losses = []
+        model.to(device)
+        for epoch in range(num_epochs):
+            epoch_losses = []
+            for x, _ in tqdm(train_loader, desc=f'{epoch+1}/{num_epochs}'):
+                x = x.to(device)
+
+                if use_closure:
+                    def closure():
+                        recon_x, mu, logvar = model(x)  # Forward pass
+                        loss = criterion(recon_x, x, mu, logvar)  # Compute the loss
+                        loss.backward()  # Backward pass
+                        return loss, recon_x
+                    loss, recon_x = optimizer.step(closure)
+                    optimizer.zero_grad()
+
+                else:
+                    recon_x, mu, logvar = model(x)
+                    loss = criterion(recon_x, x, mu, logvar)
+                    loss.backward()
+                    optimizer.step()
+                    optimizer.zero_grad()
+
+                epoch_losses.append(loss.item())
+
+            all_losses.append(epoch_losses)
+            if verbose:
+                print(f"Epoch {epoch + 1}, loss = {loss.item()  / len(x)}")
+
+        return all_losses
+    
 
     @staticmethod
+    def train(optimizer_type,
+              model,
+              train_loader, 
+              learning_rate, 
+              sample_rate, 
+              criterion, 
+              num_epochs, 
+              target_epsilon, 
+              clip_bound, 
+              delta, 
+              device, 
+              verbose=False, 
+              **kwargs):
+        optimizer_type = optimizer_type.upper()
+        if optimizer_type == 'SGD':
+            return Training.private_train_epsilon(model, train_loader,  learning_rate, sample_rate, criterion, num_epochs, target_epsilon, clip_bound, delta, device, verbose=verbose, **kwargs)
+        elif optimizer_type == 'DICE':
+            return Training.DP_Dice_train_epsilon(model, train_loader,  learning_rate, sample_rate, criterion, num_epochs, target_epsilon, clip_bound, delta, device, verbose=verbose, **kwargs)
+        elif optimizer_type == 'ADAM':
+            return Training.DP_AdamBC_train_epsilon(model, train_loader,  learning_rate, sample_rate, criterion, num_epochs, target_epsilon, clip_bound, delta, device, verbose=verbose, **kwargs)
+        elif optimizer_type == 'KF':
+            return Training.DP_KF_train_epsilon(model, train_loader,  learning_rate, sample_rate, criterion, num_epochs, target_epsilon, clip_bound, delta, device, verbose=verbose, **kwargs)
+        else:
+            raise ValueError(f"Unsupported optimizer type: {optimizer_type}")
+
     def private_train_epsilon(
         model: torch.nn.Module,
         train_loader: torch.utils.data.DataLoader,
@@ -92,8 +138,7 @@ class Training:
         normalize_clipping= False,
         random_seed=474237,
         verbose=False,
-        **kawys
-    ):
+        **kwargs):
         # this is a known warning that can be safely ignored.
         warnings.filterwarnings(
             "ignore", message="Using a non-full backward hook when the forward contains multiple autograd Nodes"
@@ -125,7 +170,7 @@ class Training:
             loss_reduction="mean",
             normalize_clipping = normalize_clipping,
         )
-        all_losses,all_accuracies = Training.training_loop(num_epochs,train_loader,model,criterion,optimizer,device,verbose=verbose)
+        all_losses,all_accuracies = Training.training_loop(kwargs['model_type'],num_epochs,train_loader,model,criterion,optimizer,device,verbose=verbose)
         epsilon = privacy_engine.get_epsilon(delta)
         return epsilon, all_losses,all_accuracies
     
@@ -145,8 +190,7 @@ class Training:
         normalize_clipping= False,
         random_seed=474237,
         verbose=False,
-        **kawys
-    ):
+        **kwargs):
         # this is a known warning that can be safely ignored.
         warnings.filterwarnings(
             "ignore", message="Using a non-full backward hook when the forward contains multiple autograd Nodes"
@@ -181,14 +225,14 @@ class Training:
             noise_generator=rng,
             loss_reduction="mean",
             normalize_clipping = normalize_clipping,
-            # error_max_grad_norm = error_max_grad_norm,
-            **kawys
+            error_max_grad_norm = kwargs['error_max_grad_norm'] ,
+            **kwargs
         )
 
 
 
         # Training Loop
-        all_losses,all_accuracies = Training.training_loop(num_epochs,train_loader,model,criterion,optimizer,device,verbose=verbose)
+        all_losses,all_accuracies = Training.training_loop(kwargs['model_type'],num_epochs,train_loader,model,criterion,optimizer,device,verbose=verbose)
         epsilon = privacy_engine.get_epsilon(delta)
         return epsilon, all_losses,all_accuracies
     
@@ -208,8 +252,7 @@ class Training:
         normalize_clipping= False,
         random_seed=474237,
         verbose=False,
-        **kawys
-    ):
+        **kwargs):
         # this is a known warning that can be safely ignored.
         warnings.filterwarnings(
             "ignore", message="Using a non-full backward hook when the forward contains multiple autograd Nodes"
@@ -265,7 +308,7 @@ class Training:
 
 
         # Training Loop
-        all_losses,all_accuracies = Training.training_loop(num_epochs,train_loader,model,criterion,optimizer,device,verbose=verbose)
+        all_losses,all_accuracies = Training.training_loop(kwargs['model_type'],num_epochs,train_loader,model,criterion,optimizer,device,verbose=verbose)
         epsilon = privacy_engine.get_epsilon(delta)
         return epsilon, all_losses,all_accuracies
     
@@ -285,8 +328,7 @@ class Training:
         random_seed=474237,
         
         verbose=False,
-        **kawys
-    ):
+        **kwargs):
         # this is a known warning that can be safely ignored.
         warnings.filterwarnings(
             "ignore", message="Using a non-full backward hook when the forward contains multiple autograd Nodes"
@@ -330,11 +372,10 @@ class Training:
             kappa=0.7, # optional
             gamma=0.5,# optional
             normalize_clipping = normalize_clipping,
-            # error_max_grad_norm = 1
-            # dp_batch_size= int(len(train_loader.dataset) * sample_rate)
+
         )
 
 
-        all_losses,all_accuracies = Training.training_loop(num_epochs,train_loader,model,criterion,optimizer,device,verbose=verbose,use_closure=True)
+        all_losses,all_accuracies = Training.training_loop(kwargs['model_type'],num_epochs,train_loader,model,criterion,optimizer,device,verbose=verbose,use_closure=True)
         epsilon = privacy_engine.get_epsilon(delta)
         return epsilon, all_losses,all_accuracies
