@@ -67,3 +67,15 @@ class Data:
         classes = [str(i) for i in range(10)]  # MNIST has 10 classes (digits 0-9)
 
         return trainloader, testloader, classes
+
+    @staticmethod
+    def fashion_mnist(transform, batch_size):
+        trainset = torchvision.datasets.FashionMNIST(root='./data', train=True, download=True, transform=transform)
+        trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2)
+
+        testset = torchvision.datasets.FashionMNIST(root='./data', train=False, download=True, transform=transform)
+        testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
+
+        classes = ['T-shirt/top', 'Trouser', 'Pullover', 'Dress', 'Coat', 'Sandal', 'Shirt', 'Sneaker', 'Bag', 'Ankle boot']
+
+        return trainloader, testloader, classes

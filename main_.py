@@ -30,7 +30,7 @@ if __name__ == "__main__":
     learning_rate = 0.1 # Learning rate for training
     clip_bound = 1 # Clipping norm
     batch_size = 64 # Batch size as a fraction of full data size 
-    num_epochs = 1 # Number of epochs
+    num_epochs = 10 # Number of epochs
 
     target_epsilon = 10
 
@@ -40,7 +40,7 @@ if __name__ == "__main__":
 
 
     # Load data and model
-    problem_module = Problem(1,batch_size)
+    problem_module = Problem(2,batch_size)
     train_loader, test_loader,classes, model = problem_module.data_model
 
     sample_rate = batch_size / len(train_loader.dataset)
