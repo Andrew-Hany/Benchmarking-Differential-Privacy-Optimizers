@@ -40,6 +40,7 @@ class Training:
     def training_loop(num_epochs, train_loader, model, criterion, optimizer, device, verbose=False, use_closure=False):
         all_losses = []
         all_accuracies = []
+        model.to(device)
         for epoch in range(num_epochs):
             epoch_losses = []
             epoch_accuracies = []
@@ -109,7 +110,7 @@ class Training:
         )
 
         optimizer = optim.SGD(model.parameters(), learning_rate)
-        rng = torch.Generator()
+        rng = torch.Generator(device=device)
         rng.manual_seed(int(random_seed))
 
         model, optimizer, train_loader = privacy_engine.make_private_with_epsilon(
@@ -165,7 +166,7 @@ class Training:
             secure_mode=False,  # Should be set to True for production use
         )
 
-        rng = torch.Generator()
+        rng = torch.Generator(device=device)
         rng.manual_seed(int(random_seed))
 
         # making the model and optimizer private
@@ -245,7 +246,7 @@ class Training:
             dp_batch_size=int(len(train_loader.dataset) * sample_rate),
             dp_l2_norm_clip=clip_bound,dp_noise_multiplier=noise_multiplier
         )
-        rng = torch.Generator()
+        rng = torch.Generator(device=device)
         rng.manual_seed(int(random_seed))
 
         # making the model and optimizer private
@@ -311,16 +312,16 @@ class Training:
 
         # print(noise_multiplier)
         optimizer = optim.SGD(model.parameters(), learning_rate)
-        rng = torch.Generator()
+        rng = torch.Generator(device=device)
         rng.manual_seed(int(random_seed))
 
         # making the model and optimizer private
         model, optimizer, train_loader = privacy_engine.make_private_with_epsilon(
-            target_delta = delta,
             module=model,
             optimizer=optimizer,
             data_loader=train_loader,
             target_epsilon=target_epsilon,
+            target_delta = delta,
             epochs=num_epochs,
             max_grad_norm=clip_bound,
             noise_generator=rng,

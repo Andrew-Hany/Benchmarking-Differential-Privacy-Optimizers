@@ -41,7 +41,7 @@ class CNNNet(nn.Module):
     def forward(self, x):
         x = self.pool(F.relu(self.conv1(x)))
         x = self.pool(F.relu(self.conv2(x)))
-        # x = x.view(-1, 16 * 5 * 5)
+        x = x.view(-1, 16 * 5 * 5)
         x = x.view(x.size(0), -1)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
@@ -63,7 +63,7 @@ class SimpleCNN3c3d(nn.Module):
         x = F.relu(F.max_pool2d(self.conv1(x), 2))
         x = F.relu(F.max_pool2d(self.conv2(x), 2))
         x = F.relu(F.max_pool2d(self.conv3(x), 2))
-        # x = self.adaptive_pool(x)  # Apply adaptive pooling
+        x = self.adaptive_pool(x)  # Apply adaptive pooling
         x = x.view(x.size(0), -1)  # Flatten the tensor
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))

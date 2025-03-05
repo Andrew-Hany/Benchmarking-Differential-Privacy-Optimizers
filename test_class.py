@@ -25,9 +25,9 @@ class Testing():
                 loss = criterion(out, y)
                 preds = prediction_function(out)
                 corrects = torch.tensor(torch.sum(preds == y).item())
-                losses.append(loss)
+                losses.append(loss.item())
                 accuracies.append(corrects)
 
-            average_loss = np.array(loss).sum() / total_size
-            total_accuracy = np.array(accuracies).sum() / total_size
+            average_loss = np.sum(losses) / total_size 
+            total_accuracy = np.sum(accuracies) / total_size 
             return average_loss, total_accuracy

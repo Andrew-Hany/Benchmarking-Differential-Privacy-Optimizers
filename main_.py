@@ -1,3 +1,6 @@
+import os
+# os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
+
 import torch
 import torchvision
 import torchvision.transforms as transforms
@@ -5,7 +8,6 @@ import torch.nn as nn
 
 import torch.nn.functional as F
 import torch.optim as optim
-import cv2
 import numpy as n
 import numpy.random as npr
 import opacus
@@ -23,25 +25,31 @@ from Optimizers.Adam_optimizer.AdamBC import *
 
 
 if __name__ == "__main__":
-    delta = 1e-5
-    learning_rate = 0.05 # Learning rate for training
-    clip_bound = 1 # Clipping norm
-    sample_rate = 0.03 # Batch size as a fraction of full data size 
-    num_epochs = 1 # Number of epochs
-    torch.manual_seed(472368)
 
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    delta = 1e-5
+    learning_rate = 0.1 # Learning rate for training
+    clip_bound = 1 # Clipping norm
+    batch_size = 64 # Batch size as a fraction of full data size 
+    num_epochs = 1 # Number of epochs
+
     target_epsilon = 10
 
+    torch.manual_seed(472368)
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    print(device)
+
+
     # Load data and model
-    problem_module = Problem(0,sample_rate)
+    problem_module = Problem(1,batch_size)
     train_loader, test_loader,classes, model = problem_module.data_model
 
+    sample_rate = batch_size / len(train_loader.dataset)
+    # print(len(train_loader.dataset)*0.03)
     criterion = nn.CrossEntropyLoss()
 
     # train model
     train_module = Training()
-    epsilon,all_losses,all_accuracies = Training.train('sgd',model,train_loader,learning_rate,sample_rate,criterion,num_epochs,target_epsilon,clip_bound,
+    epsilon,all_losses,all_accuracies = Training.train('kf',model,train_loader,learning_rate,sample_rate,criterion,num_epochs,target_epsilon,clip_bound,
         delta, device,
         verbose=True,
         error_max_grad_norm=1.0,
