@@ -21,16 +21,19 @@ class Testing():
             total_size = 0
             for x, y in tqdm(test_loader, desc=f'Testing'):
                 x, y = x.to(device), y.to(device)
-                total_size += len(y)
+                total_size += x.size(0)
                 out = model(x)
                 loss = criterion(out, y)
                 preds = prediction_function(out)
                 corrects = torch.tensor(torch.sum(preds == y).item())
-                losses.append(loss.item())
+                losses.append(loss.item()*x.size(0))  # Convert average batch loss to total batch loss
+                                                  
+
                 accuracies.append(corrects)
 
-            average_loss = np.sum(losses) / total_size 
+            average_loss = np.sum(losses) / total_size  # loss per sample =  average batches lossv/total_size
             total_accuracy = np.sum(accuracies) / total_size 
+
             return average_loss, total_accuracy
 
     @staticmethod
@@ -46,7 +49,7 @@ class Testing():
                 total_size += len(x)
                 recon_x, mu, logvar = model(x)
                 loss = criterion(recon_x, x, mu, logvar)
-                losses.append(loss.item())
+                losses.append(loss.item()*x.size(0)) 
 
             average_loss = np.sum(losses) / total_size 
             return average_loss

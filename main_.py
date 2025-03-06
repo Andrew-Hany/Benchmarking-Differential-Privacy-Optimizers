@@ -20,12 +20,15 @@ from trainers_class import *
 from test_class import *
 from problems_class import *
 from Optimizers.Adam_optimizer.AdamBC import *
+from saving_class import *
+from reporting_class import *
 
 
 import torch
 import torchvision
 import matplotlib.pyplot as plt
 
+import time
 def generate_and_save_images(model, data_loader, filename='generated_images.png', nrow=8):
     model.eval()
     with torch.no_grad():
@@ -61,15 +64,22 @@ def generate_and_save_images(model, data_loader, filename='generated_images.png'
     plt.close()
 
 
-if __name__ == "__main__":
+def main_train_wrapper(
+    results_directory,
+    delta = 1e-5,
+    learning_rate = 0.1 ,# Learning rate for training 3e-4
+    clip_bound = 1 ,# Clipping norm
+    batch_size = 128 ,# Batch size as a fraction of full data size 
+    num_epochs = 1,# Number of epochs
+    target_epsilon = 10,
+    problem_type=0,
+    optimizer_type ='sgd',
+    error_max_grad_norm = 1 # for Dice Optimizer
+):
 
-    delta = 1e-5
-    learning_rate = 0.5 # Learning rate for training 3e-4
-    clip_bound = 1 # Clipping norm
-    batch_size = 128 # Batch size as a fraction of full data size 
-    num_epochs = 4# Number of epochs
 
-    target_epsilon = 10
+
+    
 
     torch.manual_seed(472368)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -77,7 +87,7 @@ if __name__ == "__main__":
 
 
     # Load data and model
-    problem_module = Problem(3,batch_size)
+    problem_module = Problem(problem_type,batch_size)
     train_loader, test_loader,classes, model = problem_module.data_model
     model_type = problem_module.model_type # classification, VAE, ....
     criterion = problem_module.criterion  # each model should have its own criterion (loss function): 
@@ -90,23 +100,78 @@ if __name__ == "__main__":
 
     # train model
     train_module = Training()
-    epsilon,all_losses,all_accuracies = Training.train('sgd',model,train_loader,learning_rate,sample_rate,criterion,num_epochs,target_epsilon,clip_bound,
+    start_time = time.time()  
+    epsilon,all_losses,all_accuracies = Training.train(optimizer_type,model,train_loader,learning_rate,sample_rate,criterion,num_epochs,target_epsilon,clip_bound,
         delta, device,
         verbose=True,
-        error_max_grad_norm=1.0,
+        error_max_grad_norm=error_max_grad_norm,
         model_type = model_type
     )
-    print("Epsilon: {}, Delta: {}".format(epsilon, delta))
+    end_time = time.time()  # Record the end time
+    elapsed_time = end_time - start_time  # Calculate the elapsed time
+    print("Epsilon: {}, Delta: {}, Time Taken for Training {}".format(epsilon, delta,elapsed_time))
 
-    # # final test of test set
+    #final test of test set
     test_module = Testing()
     average_loss, total_accuracy = Testing.test(model_type,model,criterion, test_loader,device,Testing.prediction_function)
     print("Loss: {}, Accuracy: {}".format(average_loss, total_accuracy))
 
+    if model_type.lower() == 'vae':
+        generate_and_save_images(model, train_loader)
 
-    generate_and_save_images(model, train_loader)
-    # Save the model
-    # torch.save(model.state_dict(), 'trained_model.pth')
-    # print("Model saved as 'trained_model.pth'")
+    #
+    parameters = {
+        "optimizer_type": optimizer_type,
+        "model_type" : model_type,
+        "problem_type": problem_type,
+        "learning_rate": learning_rate,
+        "num_epochs": num_epochs,  # Number of epochs 
+        "batch_size": batch_size,  # Batch size as a fraction of full data size
+        "epsilon": target_epsilon,
+        "delta": delta,
+        "clip_bound": clip_bound,  # Clipping norm
+        
+    }
+
+    # Conditionally add "error_max_grad_norm" if optimizer_type is 'dice'
+    if optimizer_type.lower() == 'dice':
+        parameters["error_max_grad_norm"] = 1  # for Dice Optimizer
+
+    #saving the files and the results into .pth and .json
+    saving_module = Saving()
+    results = saving_module.save_results(results_directory,model,parameters,all_losses,all_accuracies,average_loss, total_accuracy,elapsed_time)
 
 
+def reporting_wrapper(results_directory):
+    # Saving all json files into one CSV file:
+    saving_module = Saving()
+    csv_file_path = saving_module.convert_json_to_csv(results_directory)
+
+    # here I should Add the visualization reports functions: These functions should call from reporting class
+    pass
+#--------------------------------------------------------------------------------------------------
+# Running the main function
+
+
+# optimizer_types = ['sgd',]
+target_epsilons = [1,5,10]
+batch_sizes = [32,64,128]
+# learning_rates = [0.01,0.1,0.3,0.7]
+learning_rates = 0.01
+for target_epsilon in target_epsilons:
+    for batch_size in batch_sizes:
+        for learning_rate in learning_rates:
+            main_train_wrapper(
+                results_directory='results',
+                delta = 1e-5,
+                learning_rate = learning_rate ,# Learning rate for training 3e-4
+                clip_bound = 1 ,# Clipping norm
+                batch_size = batch_size ,# Batch size as a fraction of full data size 
+                num_epochs = 100,# Number of epochs
+                target_epsilon = target_epsilon,
+                problem_type=1,
+                optimizer_type ='sgd',
+                # error_max_grad_norm = 1 # for Dice Optimizer
+            )
+
+# reporting_wrapper("results")

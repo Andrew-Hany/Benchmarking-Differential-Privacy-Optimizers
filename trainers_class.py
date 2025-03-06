@@ -60,7 +60,7 @@ class Training:
             all_losses.append(epoch_losses)
             all_accuracies.append(epoch_accuracies)
             if verbose:
-                print(f"Epoch {epoch + 1}, loss = {torch.mean(torch.tensor(epoch_losses)) }, accuracy = {torch.mean(torch.tensor(epoch_accuracies))}")
+                print(f"Epoch {epoch + 1}, loss  = {np.sum(epoch_losses) / len(epoch_losses) }, accuracy = {np.sum(all_accuracies) / len(all_accuracies)}")
 
         return all_losses, all_accuracies
     
@@ -93,7 +93,7 @@ class Training:
 
             all_losses.append(epoch_losses)
             if verbose:
-                print(f"Epoch {epoch + 1}, loss = {loss.item()  / len(x)}")
+                print(f"Epoch {epoch + 1},  loss = {np.sum(epoch_losses) / len(epoch_losses)}")
 
         return all_losses
     
