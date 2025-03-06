@@ -60,7 +60,7 @@ class Training:
             all_losses.append(epoch_losses)
             all_accuracies.append(epoch_accuracies)
             if verbose:
-                print(f"Epoch {epoch + 1}, loss  = {np.sum(epoch_losses) / len(epoch_losses) }, accuracy = {np.sum(all_accuracies) / len(all_accuracies)}")
+                print(f"Epoch {epoch + 1}, loss  = {np.sum(epoch_losses) / len(epoch_losses) }, accuracy = {np.sum(epoch_accuracies) / len(epoch_accuracies)}")
 
         return all_losses, all_accuracies
     
@@ -225,8 +225,7 @@ class Training:
             noise_generator=rng,
             loss_reduction="mean",
             normalize_clipping = normalize_clipping,
-            error_max_grad_norm = kwargs['error_max_grad_norm'] ,
-            **kwargs
+            error_max_grad_norm = kwargs['error_max_grad_norm']
         )
 
 
@@ -370,7 +369,7 @@ class Training:
             loss_reduction="mean",
             kalman=True, # need this argument
             kappa=0.7, # optional
-            gamma=0.5,# optional
+            gamma=0,# optional
             normalize_clipping = normalize_clipping,
 
         )

@@ -152,7 +152,7 @@ def adam_corr(params: List[Tensor],
 class AdamCorr(Optimizer):
     """Modified from torch's version of Adam"""
 
-    def __init__(self, params, dp_batch_size, dp_l2_norm_clip, dp_noise_multiplier=None, eps_root=1e-8,
+    def __init__(self, params, dp_batch_size, dp_l2_norm_clip, dp_noise_multiplier, eps_root=1e-8,
                  lr=1e-3, betas=(0.9, 0.999), eps=1e-8, gamma_decay=1,
                  weight_decay=0, amsgrad=False):
         if not 0.0 <= lr:

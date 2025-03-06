@@ -153,25 +153,27 @@ def reporting_wrapper(results_directory):
 # Running the main function
 
 
-# optimizer_types = ['sgd',]
-target_epsilons = [1,5,10]
-batch_sizes = [32,64,128]
-# learning_rates = [0.01,0.1,0.3,0.7]
-learning_rates = 0.01
-for target_epsilon in target_epsilons:
-    for batch_size in batch_sizes:
-        for learning_rate in learning_rates:
-            main_train_wrapper(
-                results_directory='results',
-                delta = 1e-5,
-                learning_rate = learning_rate ,# Learning rate for training 3e-4
-                clip_bound = 1 ,# Clipping norm
-                batch_size = batch_size ,# Batch size as a fraction of full data size 
-                num_epochs = 100,# Number of epochs
-                target_epsilon = target_epsilon,
-                problem_type=1,
-                optimizer_type ='sgd',
-                # error_max_grad_norm = 1 # for Dice Optimizer
-            )
+# optimizer_types = ['dice','KF']
+# target_epsilons = [1]
+# # batch_sizes = [32,64,128]
+# batch_sizes = [128]
+# # learning_rates = [0.01,0.1,0.3,0.7]
+# learning_rates = [0.1]
+# for target_epsilon in target_epsilons:
+#     for batch_size in batch_sizes:
+#         for learning_rate in learning_rates:
+#             for optimizer in optimizer_types:
+#                 main_train_wrapper(
+#                     results_directory='results',
+#                     delta = 1e-5,
+#                     learning_rate = learning_rate ,# Learning rate for training 3e-4
+#                     clip_bound = 1 ,# Clipping norm
+#                     batch_size = batch_size ,# Batch size as a fraction of full data size 
+#                     num_epochs = 20,# Number of epochs
+#                     target_epsilon = target_epsilon,
+#                     problem_type=2,
+#                     optimizer_type = optimizer,
+#                     # error_max_grad_norm = 1 # for Dice Optimizer
+#                 )
 
-# reporting_wrapper("results")
+reporting_wrapper("results")
