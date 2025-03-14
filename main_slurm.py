@@ -165,48 +165,33 @@ def reporting_wrapper(results_directory):
 #--------------------------------------------------------------------------------------------------
 # Running the main function
 
-# hyperparameters = ["optimizer_type","problem_type","learning_rate","num_epochs","batch_size","epsilon","delta","clip_bound","seed"]
-# tracker = HyperparameterTracker('/scratch/project_2003275/Andrew_temp/Benchmarking-Differential-Privacy-Optimizers/results/hyperparameters_tracking.csv', hyperparameters)
 
-# optimizer_types = ['sgd']
-# # learning_rates = np.logspace(np.log10(0.1), np.log10(0.7), num=4) #sgd
-# learning_rates = [0.001, 0.01 , 0.1  , 1.   ]
-# batch_sizes = [128, 256]
-# epsilons = [1, 5, 10]
-# seeds = [472368]
+# Define the types for each hyperparameter
+types = [str, float, int, int, int, int, float, float, int]
 
-# num_epochs = [100]
-# deltas = [1e-5]
-# clip_bounds = [1]
-# problem_types = [2]
-# torch.cuda.empty_cache()
+# Read the Hyperparameter combinations from the file
+with open('combinations.txt', 'r') as f:
+    combinations = [tuple(type_(value) for type_, value in zip(types, line.strip().split(','))) for line in f]
 
-# for optimizer in optimizer_types:
-#     for problem in problem_types:
-#         for lr in learning_rates:
-#             for epoch in num_epochs:
-#                 for batch_size in batch_sizes:
-#                     for epsilon in epsilons:
-#                         for delta in deltas:
-#                             for clip_bound in clip_bounds:
-#                                 for seed in seeds:
-#                                     if not tracker.has_run(optimizer_type=optimizer, problem_type=problem, learning_rate=lr, num_epochs=epoch, batch_size=batch_size, epsilon=epsilon, delta=delta, clip_bound=clip_bound, seed=seed):
-#                                         main_train_wrapper(
-#                                             results_directory='results',
-#                                             delta=delta,
-#                                             learning_rate=lr,
-#                                             clip_bound=clip_bound,
-#                                             batch_size=batch_size,
-#                                             num_epochs=epoch,
-#                                             target_epsilon=epsilon,
-#                                             problem_type=problem,
-#                                             optimizer_type=optimizer,
-#                                             seed=seed,
-#                                         )
-#              
-#                                     else:
-#                                         print('done before')
-#                                         print(optimizer, epsilon, batch_size, lr, seed, epoch, problem)
+index = int(os.environ['SLURM_ARRAY_TASK_ID'])
+if index >= len(combinations):
+    raise ValueError("SLURM_ARRAY_TASK_ID is out of range")
+
+optimizer, learning_rate, batch_size, epsilon, seed, num_epoch, delta, clip_bound, problem = combinations[index]
 
 
-reporting_wrapper("results")
+print(f"Running with hyperparameters: optimizer={optimizer}, learning_rate={learning_rate}, batch_size={batch_size}, epsilon={epsilon}, seed={seed}, num_epochs={num_epoch}, delta={delta}, clip_bound={clip_bound}, problem={problem}")
+main_train_wrapper(
+        results_directory='results',
+        delta=delta,
+        learning_rate=learning_rate,
+        clip_bound=clip_bound,
+        batch_size=batch_size,
+        num_epochs=num_epoch,
+        target_epsilon=epsilon,
+        problem_type=problem,
+        optimizer_type=optimizer,
+        seed=seed,
+)
+
+torch.cuda.empty_cache()

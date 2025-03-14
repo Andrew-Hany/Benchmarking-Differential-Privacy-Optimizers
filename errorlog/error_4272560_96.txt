@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/scratch/project_2003275/Andrew_temp/Benchmarking-Differential-Privacy-Optimizers/main_slurm.py", line 191, in <module>
+    raise ValueError("SLURM_ARRAY_TASK_ID is out of range")
+ValueError: SLURM_ARRAY_TASK_ID is out of range
