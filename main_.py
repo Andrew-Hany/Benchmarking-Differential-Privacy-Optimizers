@@ -165,8 +165,8 @@ def reporting_wrapper(results_directory):
 #--------------------------------------------------------------------------------------------------
 # Running the main function
 
-# hyperparameters = ["optimizer_type","problem_type","learning_rate","num_epochs","batch_size","epsilon","delta","clip_bound","seed"]
-# tracker = HyperparameterTracker('/scratch/project_2003275/Andrew_temp/Benchmarking-Differential-Privacy-Optimizers/results/hyperparameters_tracking.csv', hyperparameters)
+# hyperparameters = ["optimizer_type", "problem_type", "learning_rate", "num_epochs", "batch_size", "epsilon", "delta", "clip_bound", "seed"]
+# tracker = HyperparameterTracker('/scratch/project_2003275/Andrew_temp/Benchmarking-Differential-Privacy-Optimizers/hyperparameter_combinations_generate.py',hyperparameters,'/scratch/project_2003275/Andrew_temp/Benchmarking-Differential-Privacy-Optimizers/results/hyperparameters_tracking.csv')
 
 # optimizer_types = ['sgd']
 # # learning_rates = np.logspace(np.log10(0.1), np.log10(0.7), num=4) #sgd
@@ -175,10 +175,10 @@ def reporting_wrapper(results_directory):
 # epsilons = [1, 5, 10]
 # seeds = [472368]
 
-# num_epochs = [100]
+# num_epochs = [10]
 # deltas = [1e-5]
 # clip_bounds = [1]
-# problem_types = [2]
+# problem_types = [1]
 # torch.cuda.empty_cache()
 
 # for optimizer in optimizer_types:
@@ -203,10 +203,10 @@ def reporting_wrapper(results_directory):
 #                                             optimizer_type=optimizer,
 #                                             seed=seed,
 #                                         )
-#              
+             
 #                                     else:
 #                                         print('done before')
 #                                         print(optimizer, epsilon, batch_size, lr, seed, epoch, problem)
 
 
-reporting_wrapper("results")
+# reporting_wrapper("results")

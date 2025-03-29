@@ -2,19 +2,23 @@ from itertools import product
 import itertools
 
 from classes.keep_track_class import *
+from classes.saving_class import *
+# Saving all json files into one CSV file:
+print('stating ...')
+saving_module = Saving()
+csv_file_path = saving_module.convert_json_to_csv('results')
 
-hyperparameters = ["optimizer_type", "problem_type", "learning_rate", "num_epochs", "batch_size", "epsilon", "delta", "clip_bound", "seed"]
-tracker = HyperparameterTracker('/scratch/project_2003275/Andrew_temp/Benchmarking-Differential-Privacy-Optimizers/hyperparameter_combinations_generate.py',hyperparameters,'/scratch/project_2003275/Andrew_temp/Benchmarking-Differential-Privacy-Optimizers/results/hyperparameters_tracking.csv')
-
-
-optimizer_types = ['sgd']
-# learning_rates = np.logspace(np.log10(0.1), np.log10(0.7), num=4) #sgd
-learning_rates = [0.001, 0.01 , 0.1  , 1.   ]
+hyperparameters = ["optimizer_type","problem_type","learning_rate","num_epochs","batch_size","epsilon","delta","clip_bound","seed"]
+tracker = HyperparameterTracker(csv_file_path,hyperparameters,'/scratch/project_2003275/Andrew_temp/Benchmarking-Differential-Privacy-Optimizers/results/hyperparameters_tracking.csv')
+tracker_file_name = tracker.extract_hyperparameters()
+optimizer_types = ['adam']
+# learning_rates = [0.001, 0.01 , 0.1  , 1.   ]
+learning_rates = [0.000001,0.00001,0.0001,0.001 ] # adam
 batch_sizes = [128, 256]
 epsilons = [1, 5, 10]
 seeds = [51, 92, 14, 71]
 
-num_epochs = [100,200]
+num_epochs = [500]
 deltas = [1e-5]
 clip_bounds = [1]
 problem_types = [2]

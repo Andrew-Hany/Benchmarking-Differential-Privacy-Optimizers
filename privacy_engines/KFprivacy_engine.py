@@ -149,6 +149,11 @@ class KF_PrivacyEngine(PrivacyEngine):
                 accountant=self.accountant.mechanism(),
                 **kwargs,
             )
+        # Adjust noise_multiplier for Kalman filter
+        if gamma != 0 and abs(gamma - (1 - kappa) / kappa) >= 1e-3:
+            c = (1 - kappa) / (gamma * kappa)
+            norm_factor = math.sqrt(c**2 + (1 - c) ** 2)
+            noise_multiplier *= norm_factor
         if len(self.accountant) > 0:
             warnings.warn(
                 "You're calling make_private_with_epsilon with non-zero privacy budget "

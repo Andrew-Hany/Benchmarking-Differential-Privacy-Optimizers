@@ -1,0 +1,5 @@
+cifar-10-python.tar.gz
+log/
+errorlog/
+data/
+results/

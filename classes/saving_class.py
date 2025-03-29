@@ -103,8 +103,8 @@ class Saving:
                     final_epoch_accuracy = np.mean(final_epoch_accuracies) if final_epoch_accuracies else None
                     row = {
                         'model_file_path': data['model_file_path'],
-                        'Training_all_losses': data['Training_all_losses'],
-                        'Training_all_accuracies': data['Training_all_accuracies'],
+                        # 'Training_all_losses': data['Training_all_losses'],
+                        # 'Training_all_accuracies': data['Training_all_accuracies'],
                         'Testing_average_loss': data['Testing_average_loss'],
                         'Testing_total_accuracy': data['Testing_total_accuracy'],
                         'final_epoch_loss':final_epoch_loss,

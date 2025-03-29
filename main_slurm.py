@@ -123,8 +123,8 @@ def main_train_wrapper(
     average_loss, total_accuracy = Testing.test(model_type,model,criterion, test_loader,device,Testing.prediction_function)
     print("Loss: {}, Accuracy: {}".format(average_loss, total_accuracy))
 
-    if model_type.lower() == 'vae':
-        generate_and_save_images(model, train_loader)
+    # if model_type.lower() == 'vae':
+    #     generate_and_save_images(model, train_loader)
 
     # add noise multiplier
     parameters = {

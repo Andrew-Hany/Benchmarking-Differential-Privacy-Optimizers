@@ -399,7 +399,7 @@ class Training:
             loss_reduction="mean",
             kalman=True, # need this argument
             kappa=0.7, # optional
-            gamma=0,# optional
+            gamma=0.5,# optional
             normalize_clipping = normalize_clipping,
 
         )

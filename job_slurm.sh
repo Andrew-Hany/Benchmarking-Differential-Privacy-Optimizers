@@ -7,10 +7,10 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:a100:1
 #SBATCH --time=24:00:00
-#SBATCH --array=0-99
+#SBATCH --array=0-96
 #SBATCH --partition=gpusmall  
 
-mkdir -p log
+mkdir -p errorlog
 mkdir -p log
 # Activate your virtual environment
 source /scratch/project_2003275/Andrew_temp/.venv/bin/activate
