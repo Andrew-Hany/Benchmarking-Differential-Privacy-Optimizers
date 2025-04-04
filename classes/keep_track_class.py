@@ -14,11 +14,27 @@ class HyperparameterTracker:
         }
 
     def extract_hyperparameters(self):
-        # Read the CSV file using pandas
-        df = pd.read_csv(self.results_file)
-        
+        try:
+            df = pd.read_csv(self.results_file)
+        except:
+            print(f"Error: File not found at {self.results_file}") 
+            return None 
+
+        if df.empty:
+            print("Warning: The DataFrame is empty. No hyperparameters extracted.")
+            empty_df = pd.DataFrame()
+            empty_df.to_csv(self.filename, index=False)
+            return self.filename
+
         # Extract the specified hyperparameters
-        extracted_hyperparameters = df[self.hyperparameters].copy()
+        try:
+            extracted_hyperparameters = df[self.hyperparameters].copy()
+        except KeyError as e:
+            print(f"Error: Hyperparameter(s) not found in DataFrame: {e}")
+
+            empty_df = pd.DataFrame()
+            empty_df.to_csv(self.filename, index=False)
+            return self.filename
         
         # Map problem types to numbers
         problem_type_column = 'problem_type'
@@ -33,7 +49,13 @@ class HyperparameterTracker:
     
     
     def has_run(self, **kwargs):
-        df = pd.read_csv(self.filename)
+        try:
+            df = pd.read_csv(self.filename)
+        except FileNotFoundError:
+            return False  # Handle the case where the file doesn't exist
+
+        if df.empty:
+            return False  # Return False if the DataFrame is empty
         
         # Check if the combination already exists and has been run
         condition = True

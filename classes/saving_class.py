@@ -80,6 +80,8 @@ class Saving:
 
 
     def convert_json_to_csv(self,results_directory):
+        if not os.path.exists(results_directory):
+            os.makedirs(results_directory, exist_ok=True)
         csv_file_path = os.path.join(results_directory, 'results.csv')
         
         try:
