@@ -110,6 +110,7 @@ def main_train_wrapper(
     train_module = Training()
     epsilon,noise_multiplier,all_losses,all_accuracies,elapsed_time = Training.train(optimizer_type,model,train_loader,learning_rate,sample_rate,criterion,num_epochs,target_epsilon,clip_bound,
         delta, device,
+        normalize_clipping= True,
         random_seed = seed,
         verbose=True,
         error_max_grad_norm=error_max_grad_norm,
@@ -212,15 +213,15 @@ def reporting_wrapper(results_directory):
 
 # reporting_wrapper("results")
 
-main_train_wrapper(
-    results_directory='results',
-    delta=1e-5,
-    learning_rate=0.01,
-    clip_bound=1,
-    batch_size=1024,
-    num_epochs=1,
-    target_epsilon=5,
-    problem_type=0,
-    optimizer_type='sgd',
-    seed=1,
-)
+# main_train_wrapper(
+#     results_directory='results',
+#     delta=1e-5,
+#     learning_rate=0.01,
+#     clip_bound=1,
+#     batch_size=1024,
+#     num_epochs=1,
+#     target_epsilon=5,
+#     problem_type=1,
+#     optimizer_type='sgd',
+#     seed=1,
+# )

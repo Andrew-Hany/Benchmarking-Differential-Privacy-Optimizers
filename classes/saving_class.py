@@ -3,15 +3,14 @@ import os
 import torch
 import csv
 import numpy as np
+
+from .problems_class import _problem_registry
 class Saving:
     
     def __init__(self):
         self.problem_mapping = {
-            0:'Testing',
-            1: "cifar10_3c3d",
-            2: "fashion_mnist_2c2d",
-            3: "fashion_mnist_vae",
-            4: "mnist_vae"
+            problem_type: problem_definition.__class__.__name__
+            for problem_type, problem_definition in _problem_registry.items()
         }
 
     def save_model(self,model, file_path='trained_model.pth'):

@@ -15,6 +15,7 @@ class TransformFactory:
         Combines multiple transformations into a single Compose object.
         - Handles both single transformations and Compose objects.
         - Ignores invalid or None inputs.
+        - It assumes no overlapping transformation between models and data
         """
         combined = []
 

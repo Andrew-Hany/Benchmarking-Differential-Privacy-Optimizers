@@ -1,5 +1,6 @@
 import pandas as pd
 import os
+from .problems_class import _problem_registry
 
 class HyperparameterTracker:
     def __init__(self, results_file, hyperparameters, filename):
@@ -7,11 +8,10 @@ class HyperparameterTracker:
         self.hyperparameters = hyperparameters
         self.filename = filename
         self.problem_mapping = {
-            1: "cifar10_3c3d",
-            2: "fashion_mnist_2c2d",
-            3: "fashion_mnist_vae",
-            4: "mnist_vae"
+            problem_type: problem_definition.__class__.__name__
+            for problem_type, problem_definition in _problem_registry.items()
         }
+
 
     def extract_hyperparameters(self):
         try:
