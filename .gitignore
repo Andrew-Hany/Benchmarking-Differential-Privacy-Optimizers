@@ -1,5 +1,6 @@
 log/
 errorlog/
 data/
+__pycache__
 results/
 
