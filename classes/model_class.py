@@ -1,24 +1,50 @@
-import torch
+from abc import ABC, abstractmethod
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers import ViTModel
 import numpy as np
-# class VisionTransformerNet(nn.Module):
-#     def __init__(self, num_classes):
-#         super(VisionTransformerNet, self).__init__()
-#         self.vit = ViTModel.from_pretrained('google/vit-base-patch16-224-in21k')
-#         self.classifier = nn.Linear(self.vit.config.hidden_size, num_classes)
+import torchvision.transforms as transforms
 
-#     def forward(self, pixel_values):
-#         outputs = self.vit(pixel_values=pixel_values)
-#         pooled_output = outputs.pooler_output
-#         logits = self.classifier(pooled_output)
-#         return logits
+# Abstraction for Model Factories
+class ModelFactory(ABC):
+    @abstractmethod
+    def create_model(self, num_classes: int, input_dims: tuple) -> nn.Module:
+        """Creates and returns a model."""
+        pass
 
+    @abstractmethod
+    def get_transform(self):
+        """Returns the required transformations for the model."""
+        pass
+
+# VisionTransformer Implementation
+class VisionTransformerFactory(ModelFactory):
+    def create_model(self, num_classes: int, input_dims: tuple) -> nn.Module:
+        from transformers import ViTModel
+        class VisionTransformerNet(nn.Module):
+            def __init__(self, num_classes):
+                super(VisionTransformerNet, self).__init__()
+                self.vit = ViTModel.from_pretrained('google/vit-base-patch16-224-in21k')
+                self.classifier = nn.Linear(self.vit.config.hidden_size, num_classes)
+
+            def forward(self, pixel_values):
+                outputs = self.vit(pixel_values=pixel_values)
+                pooled_output = outputs.pooler_output
+                logits = self.classifier(pooled_output)
+                return logits
+
+        return VisionTransformerNet(num_classes)
+
+    def get_transform(self):
+        """Transformations required for Vision Transformer."""
+        return transforms.Compose([
+            transforms.Resize((224, 224))  # Fixed input size for ViT
+        ])
+
+# CNNNet Implementation
 class CNNNet(nn.Module):
     def __init__(self, num_classes, input_dims):
         super(CNNNet, self).__init__()
-        self.H, self.W,self.channels = input_dims
+        self.H, self.W, self.channels = input_dims
         self.conv1 = nn.Conv2d(self.channels, 6, 5)
         self.pool = nn.MaxPool2d(2, 2)
         self.conv2 = nn.Conv2d(6, 16, 5)
@@ -39,18 +65,27 @@ class CNNNet(nn.Module):
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
         return x
-    
+
+class CNNNetFactory(ModelFactory):
+    def create_model(self, num_classes: int, input_dims: tuple) -> nn.Module:
+        return CNNNet(num_classes, input_dims)
+
+    def get_transform(self):
+        """No additional transformations required for CNN."""
+        return None
+
+# SimpleCNN3c3d Implementation
 class SimpleCNN3c3d(nn.Module):
     def __init__(self, num_classes, input_dims):
         super(SimpleCNN3c3d, self).__init__()
-        self.H, self.W,self.channels = input_dims
+        self.H, self.W, self.channels = input_dims
         self.conv1 = nn.Conv2d(self.channels, 32, kernel_size=3)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3)
         self.conv3 = nn.Conv2d(64, 128, kernel_size=3)
 
         fc_dims_H = np.floor(np.floor(np.floor((self.H - 2) / 2 - 2) / 2 - 2) / 2).astype(int)
         fc_dims_W = np.floor(np.floor(np.floor((self.W - 2) / 2 - 2) / 2 - 2) / 2).astype(int)
-        self.fc1 = nn.Linear(128*fc_dims_H*fc_dims_W, 256)
+        self.fc1 = nn.Linear(128 * fc_dims_H * fc_dims_W, 256)
         self.fc2 = nn.Linear(256, 128)
         self.fc3 = nn.Linear(128, num_classes)
 
@@ -65,16 +100,25 @@ class SimpleCNN3c3d(nn.Module):
         x = self.fc3(x)
         return F.log_softmax(x, dim=1)
 
+class SimpleCNN3c3dFactory(ModelFactory):
+    def create_model(self, num_classes: int, input_dims: tuple) -> nn.Module:
+        return SimpleCNN3c3d(num_classes, input_dims)
+
+    def get_transform(self):
+        """No additional transformations required for SimpleCNN3c3d."""
+        return None
+
+# SimpleCNN2c2d Implementation
 class SimpleCNN2c2d(nn.Module):
     def __init__(self, num_classes, input_dims):
         super(SimpleCNN2c2d, self).__init__()
-        self.H, self.W,self.channels = input_dims
+        self.H, self.W, self.channels = input_dims
         self.conv1 = nn.Conv2d(self.channels, 32, kernel_size=3)  
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3)
 
         fc_dims_H = np.floor(np.floor((self.H - 2) / 2 - 2) / 2 ).astype(int)
         fc_dims_W = np.floor(np.floor((self.W - 2) / 2 - 2) / 2 ).astype(int)
-        self.fc1 = nn.Linear(64*fc_dims_H*fc_dims_W, 128) 
+        self.fc1 = nn.Linear(64 * fc_dims_H * fc_dims_W, 128) 
         self.fc2 = nn.Linear(128, num_classes)
 
     def forward(self, x):
@@ -85,7 +129,15 @@ class SimpleCNN2c2d(nn.Module):
         x = self.fc2(x)
         return F.log_softmax(x, dim=1)
 
+class SimpleCNN2c2dFactory(ModelFactory):
+    def create_model(self, num_classes: int, input_dims: tuple) -> nn.Module:
+        return SimpleCNN2c2d(num_classes, input_dims)
 
+    def get_transform(self):
+        """No additional transformations required for SimpleCNN2c2d."""
+        return None
+
+# ConvVAE Implementation
 class ConvVAE(nn.Module):
     def __init__(self, input_dims, latent_dim):
         super(ConvVAE, self).__init__()
@@ -162,3 +214,14 @@ class ConvVAE(nn.Module):
         z = self.reparameterize(mu, logvar)
         recon_x = self.decode(z)
         return recon_x, mu, logvar
+
+class ConvVAEFactory(ModelFactory):
+    def __init__(self, latent_dim: int):
+        self.latent_dim = latent_dim
+
+    def create_model(self, num_classes: int, input_dims: tuple) -> nn.Module:
+        return ConvVAE(input_dims, self.latent_dim)
+
+    def get_transform(self):
+        """No additional transformations required for ConvVAE."""
+        return None

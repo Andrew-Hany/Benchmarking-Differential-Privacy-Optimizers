@@ -23,6 +23,7 @@ from Optimizers.Adam_optimizer.AdamBC import *
 from classes.saving_class import *
 from classes.reporting_class import *
 from classes.keep_track_class import *
+from transformers import *
 
 
 import torch
@@ -92,10 +93,10 @@ def main_train_wrapper(
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(device)
 
-
-    # Load data and model
-    problem_module = Problem(problem_type,batch_size)
-    train_loader, test_loader,classes, model = problem_module.data_model
+    problem_module = Problem(problem_type, batch_size)
+    train_loader = problem_module.train_loader
+    test_loader = problem_module.test_loader
+    model = problem_module.model
     model_type = problem_module.model_type # classification, VAE, ....
     criterion = problem_module.criterion  # each model should have its own criterion (loss function): 
                                         # For similicity, it will be part of the problem function
@@ -210,3 +211,16 @@ def reporting_wrapper(results_directory):
 
 
 # reporting_wrapper("results")
+
+main_train_wrapper(
+    results_directory='results',
+    delta=1e-5,
+    learning_rate=0.01,
+    clip_bound=1,
+    batch_size=1024,
+    num_epochs=1,
+    target_epsilon=5,
+    problem_type=0,
+    optimizer_type='sgd',
+    seed=1,
+)

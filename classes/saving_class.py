@@ -7,6 +7,7 @@ class Saving:
     
     def __init__(self):
         self.problem_mapping = {
+            0:'Testing',
             1: "cifar10_3c3d",
             2: "fashion_mnist_2c2d",
             3: "fashion_mnist_vae",
