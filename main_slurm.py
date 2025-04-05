@@ -40,7 +40,7 @@ main_train_wrapper(
     batch_size=1024,
     num_epochs=1,
     target_epsilon=5,
-    problem_type=1,
+    problem_type=2,
     optimizer_type='sgd',
     seed=1,
 )

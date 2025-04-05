@@ -103,24 +103,32 @@ def main_train_wrapper(
 
     # train model
     train_module = Training()
-    epsilon,noise_multiplier,all_losses,all_accuracies,elapsed_time = Training.train(optimizer_type,model_type,model,train_loader,learning_rate,sample_rate,criterion,num_epochs,target_epsilon,clip_bound,
-        delta, device,
-        normalize_clipping= True,
-        random_seed = seed,
-        verbose=True,
-        error_max_grad_norm=error_max_grad_norm
+    epsilon,noise_multiplier, all_train_losses, all_train_accuracies,all_test_losses,all_test_accuracies,elapsed_time = Training.train(
+    optimizer_type,
+    model_type,
+    model,
+    train_loader,
+    test_loader,
+    learning_rate,
+    sample_rate,
+    criterion,
+    num_epochs,
+    target_epsilon,
+    clip_bound,
+    delta, 
+    device,
+    accountant='prv',
+    normalize_clipping= True,
+    random_seed = seed,
+    verbose=True,
+    error_max_grad_norm=error_max_grad_norm
         
     )
 
     print("Epsilon: {}, Delta: {}, Time Taken for Training {}".format(epsilon, delta,elapsed_time))
 
-    #final test of test set
-    test_module = Testing()
-    average_loss, total_accuracy = Testing.test(model_type,model,criterion, test_loader,device,Testing.prediction_function)
-    print("Loss: {}, Accuracy: {}".format(average_loss, total_accuracy))
-
-    if model_type.lower() == 'vae':
-        generate_and_save_images(model, train_loader)
+    # if model_type.lower() == 'vae':
+    #     generate_and_save_images(model, train_loader)
 
     # add noise multiplier
     parameters = {
@@ -144,7 +152,7 @@ def main_train_wrapper(
 
     #saving the files and the results into .pth and .json
     saving_module = Saving()
-    results = saving_module.save_results(results_directory,model,parameters,all_losses,all_accuracies,average_loss, total_accuracy,elapsed_time)
+    results = saving_module.save_results(results_directory,model,parameters, all_train_losses, all_train_accuracies,all_test_losses,all_test_accuracies,elapsed_time)
 
 
 def reporting_wrapper(results_directory):

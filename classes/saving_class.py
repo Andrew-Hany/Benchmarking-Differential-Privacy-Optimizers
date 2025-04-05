@@ -48,7 +48,7 @@ class Saving:
         return os.path.join(directory, json_file_name)
 
   
-    def save_results(self,results_directory,model, parameters, Training_all_losses, Training_all_accuracies, Testing_average_loss, Testing_total_accuracy, elapsed_time):
+    def save_results(self,results_directory,model, parameters,  all_train_losses, all_train_accuracies,all_test_losses,all_test_accuracies, elapsed_time):
         
         parameters["problem_type"] = self.problem_mapping[parameters["problem_type"]]
         results_file_path = self.get_json_file_path(results_directory,parameters["problem_type"], parameters["optimizer_type"], parameters)
@@ -64,10 +64,10 @@ class Saving:
             results = {
                 'model_file_path':model_file_path,
                 'parameters':parameters,
-                'Training_all_losses': Training_all_losses,
-                'Training_all_accuracies': Training_all_accuracies,
-                'Testing_average_loss': Testing_average_loss,
-                'Testing_total_accuracy': Testing_total_accuracy,
+                'Training_all_losses': all_train_losses,
+                'Training_all_accuracies': all_train_accuracies,
+                'Testing_all_losses': all_test_losses,
+                'Testing_all_accuracies': all_test_accuracies,
                 'elapsed_time': elapsed_time
             }
             

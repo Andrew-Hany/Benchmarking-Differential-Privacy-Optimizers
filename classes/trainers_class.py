@@ -31,13 +31,14 @@ def register_optimizer(optimizer_type):
         OptimizerRegistry[optimizer_type.upper()] = cls
         return cls
     return decorator
-class BaseOptimizer(ABC):
+class BaseOptimizer_trainer(ABC):
     @abstractmethod
     def train(
         self,
         model: torch.nn.Module,
         model_type,
         train_loader: torch.utils.data.DataLoader,
+        test_loader:torch.utils.data.DataLoader,
         learning_rate,
         sample_rate,
         criterion,
@@ -75,12 +76,13 @@ class BaseOptimizer(ABC):
         pass
 
 @register_optimizer("SGD")
-class DP_SGD_train_epsilon(BaseOptimizer):
+class DP_SGD_train_epsilon(BaseOptimizer_trainer):
     @staticmethod
     def train(
         model: torch.nn.Module,
         model_type,
         train_loader: torch.utils.data.DataLoader,
+        test_loader:torch.utils.data.DataLoader,
         learning_rate,
         sample_rate,
         criterion,
@@ -89,12 +91,13 @@ class DP_SGD_train_epsilon(BaseOptimizer):
         clip_bound: float,
         delta: float,
         device,
+        accountant='prv',
         normalize_clipping= False,
         random_seed=474237,
         verbose=False,
         **kwargs):
         privacy_engine = opacus.PrivacyEngine(
-            accountant="prv",
+            accountant=accountant,
             secure_mode=False,  # Should be set to True for production use
         )
 
@@ -122,16 +125,17 @@ class DP_SGD_train_epsilon(BaseOptimizer):
             normalize_clipping = normalize_clipping,
         )
         orchestrator = TrainingOrchestrator()
-        all_losses, all_accuracies,elapsed_time = orchestrator.training_loop(model_type,num_epochs,train_loader,model,criterion,optimizer,device,verbose=verbose)
+        all_train_losses, all_train_accuracies,all_test_losses,all_test_accuracies,elapsed_time = orchestrator.training_loop(model_type,num_epochs,train_loader,test_loader,model,criterion,optimizer,device,verbose=verbose)
         epsilon = privacy_engine.get_epsilon(delta)
-        return epsilon,noise_multiplier, all_losses,all_accuracies,elapsed_time
+        return epsilon,noise_multiplier, all_train_losses, all_train_accuracies,all_test_losses,all_test_accuracies,elapsed_time
 
 @register_optimizer("DICE")
-class DP_DICE_train_epsilon(BaseOptimizer):
+class DP_DICE_train_epsilon(BaseOptimizer_trainer):
     def train(
         model: torch.nn.Module,
         model_type,
         train_loader: torch.utils.data.DataLoader,
+        test_loader:torch.utils.data.DataLoader,
         learning_rate,
         sample_rate,
         criterion,
@@ -140,6 +144,7 @@ class DP_DICE_train_epsilon(BaseOptimizer):
         clip_bound: float,
         delta: float,
         device,
+        accountant='prv',
         normalize_clipping= False,
         random_seed=474237,
         verbose=False,
@@ -148,7 +153,7 @@ class DP_DICE_train_epsilon(BaseOptimizer):
 
         optimizer = optim.SGD(model.parameters(), learning_rate)
         privacy_engine = Dice_PrivacyEngine(
-            accountant="prv",
+            accountant=accountant,
             # accountant='rdp',
             secure_mode=False,
         )
@@ -183,16 +188,17 @@ class DP_DICE_train_epsilon(BaseOptimizer):
 
         # Training Loop
         orchestrator = TrainingOrchestrator()
-        all_losses, all_accuracies,elapsed_time = Training.training_loop(model_type,num_epochs,train_loader,model,criterion,optimizer,device,verbose=verbose)
+        all_train_losses, all_train_accuracies,all_test_losses,all_test_accuracies,elapsed_time = Training.training_loop(model_type,num_epochs,train_loader,test_loader,model,criterion,optimizer,device,verbose=verbose)
         epsilon = privacy_engine.get_epsilon(delta)
-        return epsilon,noise_multiplier, all_losses,all_accuracies,elapsed_time
+        return epsilon,noise_multiplier, all_train_losses, all_train_accuracies,all_test_losses,all_test_accuracies,elapsed_time
 
 @register_optimizer("ADAMBC")
-class DP_ADAM_train_epsilon(BaseOptimizer):
+class DP_ADAM_train_epsilon(BaseOptimizer_trainer):
     def train(
         model: torch.nn.Module,
         model_type,
         train_loader: torch.utils.data.DataLoader,
+        test_loader:torch.utils.data.DataLoader,
         learning_rate,
         sample_rate,
         criterion,
@@ -201,6 +207,7 @@ class DP_ADAM_train_epsilon(BaseOptimizer):
         clip_bound: float,
         delta: float,
         device,
+        accountant='prv',
         normalize_clipping= False,
         random_seed=474237,
         verbose=False,
@@ -209,7 +216,7 @@ class DP_ADAM_train_epsilon(BaseOptimizer):
 
 
         privacy_engine = opacus.PrivacyEngine(
-            accountant="prv",
+            accountant=accountant,
             # accountant='rdp',
             secure_mode=False,  # Should be set to True for production use
         )
@@ -248,15 +255,16 @@ class DP_ADAM_train_epsilon(BaseOptimizer):
 
         # Training Loop
         orchestrator = TrainingOrchestrator()
-        all_losses, all_accuracies,elapsed_time = orchestrator.training_loop(model_type,num_epochs,train_loader,model,criterion,optimizer,device,verbose=verbose)
+        all_train_losses, all_train_accuracies,all_test_losses,all_test_accuracies,elapsed_time = orchestrator.training_loop(model_type,num_epochs,train_loader,test_loader,model,criterion,optimizer,device,verbose=verbose)
         epsilon = privacy_engine.get_epsilon(delta)
-        return epsilon,noise_multiplier, all_losses,all_accuracies,elapsed_time
+        return epsilon,noise_multiplier, all_train_losses, all_train_accuracies,all_test_losses,all_test_accuracies,elapsed_time
 @register_optimizer("KF")
-class DP_KF_train_epsilon(BaseOptimizer):
+class DP_KF_train_epsilon(BaseOptimizer_trainer):
     def train(
         model: torch.nn.Module,
         model_type,
         train_loader: torch.utils.data.DataLoader,
+        test_loader:torch.utils.data.DataLoader,
         learning_rate,
         sample_rate,
         criterion,
@@ -265,6 +273,7 @@ class DP_KF_train_epsilon(BaseOptimizer):
         clip_bound: float,
         delta: float,
         device,
+        accountant='prv',
         normalize_clipping= False,
         random_seed=474237,
         
@@ -272,7 +281,7 @@ class DP_KF_train_epsilon(BaseOptimizer):
         **kwargs):
 
         privacy_engine = KF_PrivacyEngine(
-            accountant="prv",
+            accountant=accountant,
             # accountant='rdp',
             secure_mode=False,  # Should be set to True for production use
         )
@@ -309,16 +318,16 @@ class DP_KF_train_epsilon(BaseOptimizer):
         )
 
         orchestrator = TrainingOrchestrator()
-        all_losses, all_accuracies,elapsed_time = orchestrator.training_loop(model_type,num_epochs,train_loader,model,criterion,optimizer,device,verbose=verbose,use_closure=True)
+        all_train_losses, all_train_accuracies,all_test_losses,all_test_accuracies,elapsed_time = orchestrator.training_loop(model_type,num_epochs,train_loader,test_loader,model,criterion,optimizer,device,verbose=verbose,use_closure=True)
         epsilon = privacy_engine.get_epsilon(delta)
-        return epsilon,noise_multiplier, all_losses,all_accuracies,elapsed_time
+        return epsilon,noise_multiplier, all_train_losses, all_train_accuracies,all_test_losses,all_test_accuracies,elapsed_time
 
 
 
 
 class Training:
     @staticmethod
-    def train(optimizer_type,model_type, model, train_loader, learning_rate, sample_rate, criterion, num_epochs, target_epsilon, clip_bound, delta, device, normalize_clipping=False, random_seed=474237, verbose=False, **kwargs):
+    def train(optimizer_type,model_type, model, train_loader,test_loader, learning_rate, sample_rate, criterion, num_epochs, target_epsilon, clip_bound, delta, device,accountant='prv', normalize_clipping=False, random_seed=474237, verbose=False, **kwargs):
         """
         Main training method that integrates optimizers, privacy engines, and training loops.
         """
@@ -341,6 +350,7 @@ class Training:
             model, 
             model_type,
             train_loader,  
+            test_loader,
             learning_rate, 
             sample_rate, 
             criterion, 
@@ -349,6 +359,7 @@ class Training:
             clip_bound, 
             delta, 
             device,
+            accountant=accountant,
             normalize_clipping=normalize_clipping, 
             random_seed=random_seed,
             verbose=verbose, 
