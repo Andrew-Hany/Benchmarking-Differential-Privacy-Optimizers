@@ -117,6 +117,8 @@ class FashionMNISTProvider(DataProvider):
         testset = datasets.FashionMNIST(root='./data', train=False, download=True, transform=transform)
         testloader = torch.utils.data.DataLoader(testset, batch_size=self.batch_size, shuffle=False, num_workers=2)
 
+
+
         # Define classes
         classes = ['T-shirt/top', 'Trouser', 'Pullover', 'Dress', 'Coat', 'Sandal', 'Shirt', 'Sneaker', 'Bag', 'Ankle boot']
         return trainloader, testloader, classes

@@ -1,4 +1,41 @@
 from main_ import main_train_wrapper
+import os
+
+import torch
+import torchvision
+import torchvision.transforms as transforms
+import torch.nn as nn
+
+import torch.nn.functional as F
+import torch.optim as optim
+import numpy as n
+import numpy.random as npr
+import opacus
+from opacus import PrivacyEngine
+from opacus.accountants.utils import get_noise_multiplier
+
+import warnings
+from tqdm import tqdm
+
+from classes.trainers_class import *
+from classes.test_class import *
+from classes.problems_class import *
+from Optimizers.Adam_optimizer.AdamBC import *
+from classes.saving_class import *
+from classes.reporting_class import *
+from classes.keep_track_class import *
+from transformers import *
+
+
+import torch
+import torchvision
+import matplotlib.pyplot as plt
+
+from itertools import product
+from queue import Queue
+from threading import Thread
+
+import time
 #--------------------------------------------------------------------------------------------------
 # Running the main function
 
@@ -32,13 +69,14 @@ from main_ import main_train_wrapper
 # )
 
 
+# This is on single GPU (not slurm)
 main_train_wrapper(
     results_directory='results',
     delta=1e-5,
     learning_rate=0.01,
     clip_bound=1,
-    batch_size=1024,
-    num_epochs=1,
+    batch_size=512,
+    num_epochs=2,
     target_epsilon=5,
     problem_type=2,
     optimizer_type='sgd',

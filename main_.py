@@ -91,6 +91,7 @@ def main_train_wrapper(
 
     problem_module = Problem(problem_type, batch_size)
     train_loader = problem_module.train_loader
+
     test_loader = problem_module.test_loader
     model = problem_module.model
     model_type = problem_module.model_type # classification, VAE, ....

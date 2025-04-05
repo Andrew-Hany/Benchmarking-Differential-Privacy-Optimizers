@@ -124,6 +124,7 @@ class DP_SGD_train_epsilon(BaseOptimizer_trainer):
             loss_reduction="mean",
             normalize_clipping = normalize_clipping,
         )
+
         orchestrator = TrainingOrchestrator()
         all_train_losses, all_train_accuracies,all_test_losses,all_test_accuracies,elapsed_time = orchestrator.training_loop(model_type,num_epochs,train_loader,test_loader,model,criterion,optimizer,device,verbose=verbose)
         epsilon = privacy_engine.get_epsilon(delta)

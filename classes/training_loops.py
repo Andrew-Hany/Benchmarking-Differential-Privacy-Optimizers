@@ -11,6 +11,8 @@ import sys
 import os
 import time
 
+from opacus.utils.batch_memory_manager import BatchMemoryManager
+
 from .test_class import *
 # Registry for training loops
 TrainingLoopRegistry = {}
@@ -28,6 +30,8 @@ class BaseTrainingLoop(ABC):
     def train(self, num_epochs, train_loader, test_loader, model, criterion, optimizer, device, verbose=False, use_closure=False):
         pass
 
+
+
 @register_training_loop("classification")
 class ClassificationTrainingLoop(BaseTrainingLoop):
     def train(self, num_epochs, train_loader,test_loader, model, criterion, optimizer, device, verbose=False, use_closure=False):
@@ -41,6 +45,8 @@ class ClassificationTrainingLoop(BaseTrainingLoop):
 
         model.to(device)
         for epoch in range(num_epochs):
+            model.train()
+
             epoch_train_losses = []
             epoch_train_accuracies = []
             for x, y in tqdm(train_loader, desc=f'{epoch+1}/{num_epochs}'):
@@ -93,6 +99,8 @@ class VAETrainingLoop(BaseTrainingLoop):
         test_module = TestManager()
         model.to(device)
         for epoch in range(num_epochs):
+            model.train()
+            
             epoch_train_losses = []
             for x, _ in tqdm(train_loader, desc=f'{epoch+1}/{num_epochs}'):
                 x = x.to(device)

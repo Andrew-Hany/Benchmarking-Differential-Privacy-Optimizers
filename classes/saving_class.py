@@ -99,19 +99,22 @@ class Saving:
                     data = json.load(f)
 
                     # Calculate the average loss and accuracy for the final epoch
-                    final_epoch_losses = data['Training_all_losses'][-1] if data['Training_all_losses'] else []
-                    final_epoch_accuracies = data['Training_all_accuracies'][-1] if data['Training_all_accuracies'] else []
+                    final_epoch_train_losses = data['Training_all_losses'][-1] if data['Training_all_losses'] else []
+                    final_epoch_train_accuracies = data['Training_all_accuracies'][-1] if data['Training_all_accuracies'] else []
 
-                    final_epoch_loss = np.mean(final_epoch_losses) if final_epoch_losses else None
-                    final_epoch_accuracy = np.mean(final_epoch_accuracies) if final_epoch_accuracies else None
+                    final_epoch_train_loss = np.mean(final_epoch_train_losses) if final_epoch_train_losses else None
+                    final_epoch_train_accuracy = np.mean(final_epoch_train_accuracies) if final_epoch_train_accuracies else None
                     row = {
                         'model_file_path': data['model_file_path'],
                         # 'Training_all_losses': data['Training_all_losses'],
                         # 'Training_all_accuracies': data['Training_all_accuracies'],
-                        'Testing_average_loss': data['Testing_average_loss'],
-                        'Testing_total_accuracy': data['Testing_total_accuracy'],
-                        'final_epoch_loss':final_epoch_loss,
-                        'final_epoch_accuracy':final_epoch_accuracy,
+                        # 'Testing_all_losses': data['Testing_all_losses'],
+                        # 'Testing_all_accuracies': data['Testing_all_accuracies'],
+
+                        'final_epoch_test_loss':data['Testing_all_losses'][-1],
+                        'final_epoch_test_accuracy': data['Testing_all_accuracies'][-1],
+                        'final_epoch_train_loss':final_epoch_train_loss,
+                        'final_epoch_train_accuracy':final_epoch_train_accuracy,
                         'elapsed_time': data['elapsed_time']
                     }
                     row.update(data['parameters'])
