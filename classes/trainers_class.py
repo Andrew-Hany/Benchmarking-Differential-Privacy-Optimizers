@@ -7,138 +7,79 @@ import opacus
 import sys
 import os
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
+from abc import ABC, abstractmethod
 from Optimizers.Adam_optimizer.AdamBC import *
 from privacy_engines.Dice_privacy_engine import Dice_PrivacyEngine
 from privacy_engines.KFprivacy_engine import KF_PrivacyEngine
-
+from .training_loops import TrainingOrchestrator
 from opacus.accountants.utils import get_noise_multiplier
+import opacus
 
-import time
-class Training:
+# Registry for optimizer-specific classes
+OptimizerRegistry = {}
 
-
-    @staticmethod 
-    def training_loop(model_type,num_epochs, train_loader, model, criterion, optimizer, device, verbose=False, use_closure=False):
-        all_losses = []
-        all_accuracies = []
-        
-        if model_type.lower() == 'classification':
-            start_time = time.time()  
-            all_losses,all_accuracies = Training.classification_training_loop(num_epochs,train_loader,model,criterion,optimizer,device,verbose=verbose,use_closure=use_closure)
-            end_time = time.time()  
-        elif model_type.lower() == 'vae':
-            start_time = time.time()  
-            all_losses = Training.VAE_training_loop(num_epochs,train_loader,model,criterion,optimizer,device,verbose=verbose,use_closure=use_closure)
-            end_time = time.time()  
-        else:
-            raise ValueError("Unsupported model type")
-        elapsed_time = end_time - start_time  
-        return all_losses, all_accuracies,elapsed_time
-    @staticmethod 
-    def classification_training_loop(num_epochs, train_loader, model, criterion, optimizer, device, verbose=False, use_closure=False):
-        all_losses = []
-        all_accuracies = []
-        model.to(device)
-        for epoch in range(num_epochs):
-            epoch_losses = []
-            epoch_accuracies = []
-            for x, y in tqdm(train_loader, desc=f'{epoch+1}/{num_epochs}'):
-                x, y = x.to(device), y.to(device)
-
-                if use_closure:
-                    def closure():
-                        out = model(x)  # Forward pass
-                        loss = criterion(out, y)  # Compute the loss
-                        loss.backward()  # Backward pass
-                        return loss, out
-                    loss, out = optimizer.step(closure)
-                    optimizer.zero_grad()
-
-                else:
-                    out = model(x)
-                    loss = criterion(out, y)
-                    loss.backward()
-                    optimizer.step()
-                    optimizer.zero_grad()
-
-                epoch_losses.append(loss.item())
-                # Calculate accuracy
-                _, predicted = torch.max(out.data, 1)
-                accuracy = (predicted == y).sum().item() / y.size(0)
-                epoch_accuracies.append(accuracy)
-
-            all_losses.append(epoch_losses)
-            all_accuracies.append(epoch_accuracies)
-            if verbose:
-                print(f"Epoch {epoch + 1}, loss  = {np.sum(epoch_losses) / len(epoch_losses) }, accuracy = {np.sum(epoch_accuracies) / len(epoch_accuracies)}")
-
-        return all_losses, all_accuracies
-    
-    @staticmethod
-    def VAE_training_loop(num_epochs, train_loader, model, criterion, optimizer, device, verbose=False, use_closure=False):
-        all_losses = []
-        model.to(device)
-        for epoch in range(num_epochs):
-            epoch_losses = []
-            for x, _ in tqdm(train_loader, desc=f'{epoch+1}/{num_epochs}'):
-                x = x.to(device)
-
-                if use_closure:
-                    def closure():
-                        recon_x, mu, logvar = model(x)  # Forward pass
-                        loss = criterion(recon_x, x, mu, logvar)  # Compute the loss
-                        loss.backward()  # Backward pass
-                        return loss, recon_x
-                    loss, recon_x = optimizer.step(closure)
-                    optimizer.zero_grad()
-
-                else:
-                    recon_x, mu, logvar = model(x)
-                    loss = criterion(recon_x, x, mu, logvar)
-                    loss.backward()
-                    optimizer.step()
-                    optimizer.zero_grad()
-
-                epoch_losses.append(loss.item())
-
-            all_losses.append(epoch_losses)
-            if verbose:
-                print(f"Epoch {epoch + 1},  loss = {np.sum(epoch_losses) / len(epoch_losses)}")
-
-        return all_losses
-    
-
-    @staticmethod
-    def train(optimizer_type,
-              model,
-              train_loader, 
-              learning_rate, 
-              sample_rate, 
-              criterion, 
-              num_epochs, 
-              target_epsilon, 
-              clip_bound, 
-              delta, 
-              device, 
-              normalize_clipping= False,
-              random_seed=474237,
-              verbose=False, 
-              **kwargs):
-        optimizer_type = optimizer_type.upper()
-        if optimizer_type == 'SGD':
-            return Training.private_train_epsilon(model, train_loader,  learning_rate, sample_rate, criterion, num_epochs, target_epsilon, clip_bound, delta, device,normalize_clipping=normalize_clipping, random_seed=random_seed,verbose=verbose, **kwargs)
-        elif optimizer_type == 'DICE':
-            return Training.DP_Dice_train_epsilon(model, train_loader,  learning_rate, sample_rate, criterion, num_epochs, target_epsilon, clip_bound, delta, device,normalize_clipping=normalize_clipping,random_seed=random_seed, verbose=verbose, **kwargs)
-        elif optimizer_type == 'ADAM':
-            return Training.DP_AdamBC_train_epsilon(model, train_loader,  learning_rate, sample_rate, criterion, num_epochs, target_epsilon, clip_bound, delta, device,normalize_clipping=normalize_clipping,random_seed=random_seed, verbose=verbose, **kwargs)
-        elif optimizer_type == 'KF':
-            return Training.DP_KF_train_epsilon(model, train_loader,  learning_rate, sample_rate, criterion, num_epochs, target_epsilon, clip_bound, delta, device,normalize_clipping=normalize_clipping,random_seed=random_seed, verbose=verbose, **kwargs)
-        else:
-            raise ValueError(f"Unsupported optimizer type: {optimizer_type}")
-
-    def private_train_epsilon(
+def register_optimizer(optimizer_type):
+    """
+    Decorator to register an optimizer-specific class for a specific optimizer type.
+    Args:
+        optimizer_type: The type of optimizer (e.g., "SGD", "DICE").
+    Returns:
+        A decorator that registers the optimizer-specific class.
+    """
+    def decorator(cls):
+        OptimizerRegistry[optimizer_type.upper()] = cls
+        return cls
+    return decorator
+class BaseOptimizer(ABC):
+    @abstractmethod
+    def train(
+        self,
         model: torch.nn.Module,
+        model_type,
+        train_loader: torch.utils.data.DataLoader,
+        learning_rate,
+        sample_rate,
+        criterion,
+        num_epochs: int,
+        target_epsilon: float,
+        clip_bound: float,
+        delta: float,
+        device,
+        normalize_clipping=False,
+        random_seed=474237,
+        verbose=False,
+        **kwargs
+    ):
+        """
+        Abstract method to define the training process for an optimizer.
+        Args:
+            model: PyTorch model.
+            model_type: string
+            train_loader: DataLoader for training data.
+            learning_rate: Learning rate for the optimizer.
+            sample_rate: Sampling rate for the dataset.
+            criterion: Loss function.
+            num_epochs: Number of training epochs.
+            target_epsilon: Target epsilon for differential privacy.
+            clip_bound: Gradient clipping bound.
+            delta: Delta for differential privacy.
+            device: Device (CPU/GPU).
+            normalize_clipping: Whether to normalize gradient clipping.
+            random_seed: Random seed for reproducibility.
+            verbose: Whether to print progress.
+            **kwargs: Additional parameters specific to the optimizer.
+        Returns:
+            Tuple of (epsilon, noise_multiplier, all_losses, all_accuracies, elapsed_time).
+        """
+        pass
+
+@register_optimizer("SGD")
+class DP_SGD_train_epsilon(BaseOptimizer):
+    @staticmethod
+    def train(
+        model: torch.nn.Module,
+        model_type,
         train_loader: torch.utils.data.DataLoader,
         learning_rate,
         sample_rate,
@@ -152,16 +93,6 @@ class Training:
         random_seed=474237,
         verbose=False,
         **kwargs):
-        # this is a known warning that can be safely ignored.
-        warnings.filterwarnings(
-            "ignore", message="Using a non-full backward hook when the forward contains multiple autograd Nodes"
-        )
-        # we would use a secure RNG in production but here we can ignore it.
-        warnings.filterwarnings("ignore", message="Secure RNG turned off.")
-        # this accounting warning is not optimal but fine to ignore for this example
-        warnings.filterwarnings("ignore", message="Optimal order is the largest alpha.")
-
-
         privacy_engine = opacus.PrivacyEngine(
             accountant="prv",
             secure_mode=False,  # Should be set to True for production use
@@ -190,14 +121,16 @@ class Training:
             loss_reduction="mean",
             normalize_clipping = normalize_clipping,
         )
-        all_losses, all_accuracies,elapsed_time = Training.training_loop(kwargs['model_type'],num_epochs,train_loader,model,criterion,optimizer,device,verbose=verbose)
+        orchestrator = TrainingOrchestrator()
+        all_losses, all_accuracies,elapsed_time = orchestrator.training_loop(model_type,num_epochs,train_loader,model,criterion,optimizer,device,verbose=verbose)
         epsilon = privacy_engine.get_epsilon(delta)
         return epsilon,noise_multiplier, all_losses,all_accuracies,elapsed_time
-    
-        
-    @staticmethod
-    def DP_Dice_train_epsilon(
+
+@register_optimizer("DICE")
+class DP_DICE_train_epsilon(BaseOptimizer):
+    def train(
         model: torch.nn.Module,
+        model_type,
         train_loader: torch.utils.data.DataLoader,
         learning_rate,
         sample_rate,
@@ -211,23 +144,13 @@ class Training:
         random_seed=474237,
         verbose=False,
         **kwargs):
-        # this is a known warning that can be safely ignored.
-        warnings.filterwarnings(
-            "ignore", message="Using a non-full backward hook when the forward contains multiple autograd Nodes"
-        )
-        # we would use a secure RNG in production but here we can ignore it.
-        warnings.filterwarnings("ignore", message="Secure RNG turned off.")
-        # this accounting warning is not optimal but fine to ignore for this example
-        warnings.filterwarnings("ignore", message="Optimal order is the largest alpha.")
 
 
-        # privacy engine
-        # privacy_engine = opacus.PrivacyEngine(
         optimizer = optim.SGD(model.parameters(), learning_rate)
         privacy_engine = Dice_PrivacyEngine(
             accountant="prv",
             # accountant='rdp',
-            secure_mode=False,  # Should be set to True for production use
+            secure_mode=False,
         )
         
         noise_multiplier = get_noise_multiplier(
@@ -236,7 +159,6 @@ class Training:
                     sample_rate=sample_rate,
                     epochs=num_epochs,
                     accountant=privacy_engine.accountant.mechanism(),
-                    # Add any additional keyword arguments if needed
         )
 
         rng = torch.Generator(device=device)
@@ -260,14 +182,16 @@ class Training:
 
 
         # Training Loop
-        all_losses, all_accuracies,elapsed_time = Training.training_loop(kwargs['model_type'],num_epochs,train_loader,model,criterion,optimizer,device,verbose=verbose)
+        orchestrator = TrainingOrchestrator()
+        all_losses, all_accuracies,elapsed_time = Training.training_loop(model_type,num_epochs,train_loader,model,criterion,optimizer,device,verbose=verbose)
         epsilon = privacy_engine.get_epsilon(delta)
         return epsilon,noise_multiplier, all_losses,all_accuracies,elapsed_time
-    
 
-    @staticmethod
-    def DP_AdamBC_train_epsilon(
+@register_optimizer("ADAMBC")
+class DP_ADAM_train_epsilon(BaseOptimizer):
+    def train(
         model: torch.nn.Module,
+        model_type,
         train_loader: torch.utils.data.DataLoader,
         learning_rate,
         sample_rate,
@@ -281,14 +205,7 @@ class Training:
         random_seed=474237,
         verbose=False,
         **kwargs):
-        # this is a known warning that can be safely ignored.
-        warnings.filterwarnings(
-            "ignore", message="Using a non-full backward hook when the forward contains multiple autograd Nodes"
-        )
-        # we would use a secure RNG in production but here we can ignore it.
-        warnings.filterwarnings("ignore", message="Secure RNG turned off.")
-        # this accounting warning is not optimal but fine to ignore for this example
-        warnings.filterwarnings("ignore", message="Optimal order is the largest alpha.")
+
 
 
         privacy_engine = opacus.PrivacyEngine(
@@ -330,13 +247,15 @@ class Training:
 
 
         # Training Loop
-        all_losses, all_accuracies,elapsed_time = Training.training_loop(kwargs['model_type'],num_epochs,train_loader,model,criterion,optimizer,device,verbose=verbose)
+        orchestrator = TrainingOrchestrator()
+        all_losses, all_accuracies,elapsed_time = orchestrator.training_loop(model_type,num_epochs,train_loader,model,criterion,optimizer,device,verbose=verbose)
         epsilon = privacy_engine.get_epsilon(delta)
         return epsilon,noise_multiplier, all_losses,all_accuracies,elapsed_time
-    
-    @staticmethod
-    def DP_KF_train_epsilon(
+@register_optimizer("KF")
+class DP_KF_train_epsilon(BaseOptimizer):
+    def train(
         model: torch.nn.Module,
+        model_type,
         train_loader: torch.utils.data.DataLoader,
         learning_rate,
         sample_rate,
@@ -351,21 +270,6 @@ class Training:
         
         verbose=False,
         **kwargs):
-        # this is a known warning that can be safely ignored.
-        warnings.filterwarnings(
-            "ignore", message="Using a non-full backward hook when the forward contains multiple autograd Nodes"
-        )
-        # we would use a secure RNG in production but here we can ignore it.
-        warnings.filterwarnings("ignore", message="Secure RNG turned off.")
-        # this accounting warning is not optimal but fine to ignore for this example
-        warnings.filterwarnings("ignore", message="Optimal order is the largest alpha.")
-
-
-
-        
-        
-        # privacy engine
-
 
         privacy_engine = KF_PrivacyEngine(
             accountant="prv",
@@ -404,7 +308,51 @@ class Training:
 
         )
 
-
-        all_losses, all_accuracies,elapsed_time = Training.training_loop(kwargs['model_type'],num_epochs,train_loader,model,criterion,optimizer,device,verbose=verbose,use_closure=True)
+        orchestrator = TrainingOrchestrator()
+        all_losses, all_accuracies,elapsed_time = orchestrator.training_loop(model_type,num_epochs,train_loader,model,criterion,optimizer,device,verbose=verbose,use_closure=True)
         epsilon = privacy_engine.get_epsilon(delta)
         return epsilon,noise_multiplier, all_losses,all_accuracies,elapsed_time
+
+
+
+
+class Training:
+    @staticmethod
+    def train(optimizer_type,model_type, model, train_loader, learning_rate, sample_rate, criterion, num_epochs, target_epsilon, clip_bound, delta, device, normalize_clipping=False, random_seed=474237, verbose=False, **kwargs):
+        """
+        Main training method that integrates optimizers, privacy engines, and training loops.
+        """
+        # this is a known warning that can be safely ignored.
+        warnings.filterwarnings(
+            "ignore", message="Using a non-full backward hook when the forward contains multiple autograd Nodes"
+        )
+        # we would use a secure RNG in production but here we can ignore it.
+        warnings.filterwarnings("ignore", message="Secure RNG turned off.")
+        # # this accounting warning is not optimal but fine to ignore for this exampl
+        warnings.filterwarnings("ignore", message="Optimal order is the largest alpha.")
+
+        #check if we have the optimizer
+        optimizer_type = optimizer_type.upper()
+        if optimizer_type not in OptimizerRegistry:
+            raise ValueError(f"Unsupported optimizer type: {optimizer_type}")
+
+        trainer = OptimizerRegistry[optimizer_type]()
+        return trainer.train(
+            model, 
+            model_type,
+            train_loader,  
+            learning_rate, 
+            sample_rate, 
+            criterion, 
+            num_epochs, 
+            target_epsilon, 
+            clip_bound, 
+            delta, 
+            device,
+            normalize_clipping=normalize_clipping, 
+            random_seed=random_seed,
+            verbose=verbose, 
+            **kwargs
+        )
+
+        

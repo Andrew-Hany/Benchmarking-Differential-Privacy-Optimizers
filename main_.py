@@ -85,10 +85,6 @@ def main_train_wrapper(
 
 ):
 
-
-
-    
-
     torch.manual_seed(seed)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(device)
@@ -102,19 +98,17 @@ def main_train_wrapper(
                                         # For similicity, it will be part of the problem function
                                         # but can be modified in the main loop if needed 
 
-
     # Sample rate is needed in AdamBC
     sample_rate = batch_size / len(train_loader.dataset)
 
     # train model
     train_module = Training()
-    epsilon,noise_multiplier,all_losses,all_accuracies,elapsed_time = Training.train(optimizer_type,model,train_loader,learning_rate,sample_rate,criterion,num_epochs,target_epsilon,clip_bound,
+    epsilon,noise_multiplier,all_losses,all_accuracies,elapsed_time = Training.train(optimizer_type,model_type,model,train_loader,learning_rate,sample_rate,criterion,num_epochs,target_epsilon,clip_bound,
         delta, device,
         normalize_clipping= True,
         random_seed = seed,
         verbose=True,
-        error_max_grad_norm=error_max_grad_norm,
-        model_type = model_type,
+        error_max_grad_norm=error_max_grad_norm
         
     )
 

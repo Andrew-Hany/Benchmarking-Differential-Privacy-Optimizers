@@ -7,9 +7,10 @@ class HyperparameterTracker:
         self.results_file = results_file
         self.hyperparameters = hyperparameters
         self.filename = filename
+        # Dynamically generate the problem mapping
         self.problem_mapping = {
-            problem_type: problem_definition.__class__.__name__
-            for problem_type, problem_definition in _problem_registry.items()
+            problem_type: problem_def.problem_name
+            for problem_type, problem_def in _problem_registry.items()
         }
 
 
