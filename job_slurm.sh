@@ -4,10 +4,10 @@
 #SBATCH --error=errorlog/error_%A_%a.txt
 #SBATCH --output=log/output_%A_%a.txt
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=4
+#SBATCH --cpus-per-task=1
 #SBATCH --gres=gpu:a100:1
 #SBATCH --time=5:00:00
-#SBATCH --array=0-96
+#SBATCH --array=0-107
 #SBATCH --partition=gpusmall  
 
 mkdir -p errorlog

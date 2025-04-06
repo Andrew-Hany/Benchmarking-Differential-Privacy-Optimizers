@@ -12,6 +12,8 @@ class DataProvider(ABC):
         If no transform is provided, uses the default transformation for the dataset.
         """
         pass
+    def get_default_transform(self):
+        pass
 
 # Concrete Implementation for CIFAR-10
 class CIFAR10Provider(DataProvider):

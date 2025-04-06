@@ -47,6 +47,7 @@ class BaseOptimizer_trainer(ABC):
         clip_bound: float,
         delta: float,
         device,
+        accountant='prv',
         normalize_clipping=False,
         random_seed=474237,
         verbose=False,
@@ -132,6 +133,7 @@ class DP_SGD_train_epsilon(BaseOptimizer_trainer):
 
 @register_optimizer("DICE")
 class DP_DICE_train_epsilon(BaseOptimizer_trainer):
+    @staticmethod
     def train(
         model: torch.nn.Module,
         model_type,
@@ -195,6 +197,7 @@ class DP_DICE_train_epsilon(BaseOptimizer_trainer):
 
 @register_optimizer("ADAMBC")
 class DP_ADAM_train_epsilon(BaseOptimizer_trainer):
+    @staticmethod
     def train(
         model: torch.nn.Module,
         model_type,
@@ -261,6 +264,7 @@ class DP_ADAM_train_epsilon(BaseOptimizer_trainer):
         return epsilon,noise_multiplier, all_train_losses, all_train_accuracies,all_test_losses,all_test_accuracies,elapsed_time
 @register_optimizer("KF")
 class DP_KF_train_epsilon(BaseOptimizer_trainer):
+    @staticmethod
     def train(
         model: torch.nn.Module,
         model_type,
@@ -328,7 +332,24 @@ class DP_KF_train_epsilon(BaseOptimizer_trainer):
 
 class Training:
     @staticmethod
-    def train(optimizer_type,model_type, model, train_loader,test_loader, learning_rate, sample_rate, criterion, num_epochs, target_epsilon, clip_bound, delta, device,accountant='prv', normalize_clipping=False, random_seed=474237, verbose=False, **kwargs):
+    def train(
+        optimizer_type,
+        model_type,
+        model,
+        train_loader,
+        test_loader, 
+        learning_rate, 
+        sample_rate, 
+        criterion, 
+        num_epochs, 
+        target_epsilon, 
+        clip_bound, 
+        delta, 
+        device,
+        accountant='prv', 
+        normalize_clipping=False, 
+        random_seed=474237, 
+        verbose=False, **kwargs):
         """
         Main training method that integrates optimizers, privacy engines, and training loops.
         """
@@ -347,6 +368,7 @@ class Training:
             raise ValueError(f"Unsupported optimizer type: {optimizer_type}")
 
         trainer = OptimizerRegistry[optimizer_type]()
+
         return trainer.train(
             model, 
             model_type,

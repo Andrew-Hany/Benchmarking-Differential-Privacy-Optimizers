@@ -16,29 +16,29 @@ class ModelFactory(ABC):
         """Returns the required transformations for the model."""
         pass
 
-# VisionTransformer Implementation
-class VisionTransformerFactory(ModelFactory):
-    def create_model(self, num_classes: int, input_dims: tuple) -> nn.Module:
-        from transformers import ViTModel
-        class VisionTransformerNet(nn.Module):
-            def __init__(self, num_classes):
-                super(VisionTransformerNet, self).__init__()
-                self.vit = ViTModel.from_pretrained('google/vit-base-patch16-224-in21k')
-                self.classifier = nn.Linear(self.vit.config.hidden_size, num_classes)
+# # VisionTransformer Implementation
+# class VisionTransformerFactory(ModelFactory):
+#     def create_model(self, num_classes: int, input_dims: tuple) -> nn.Module:
+#         from transformers import ViTModel
+#         class VisionTransformerNet(nn.Module):
+#             def __init__(self, num_classes):
+#                 super(VisionTransformerNet, self).__init__()
+#                 self.vit = ViTModel.from_pretrained('google/vit-base-patch16-224-in21k')
+#                 self.classifier = nn.Linear(self.vit.config.hidden_size, num_classes)
 
-            def forward(self, pixel_values):
-                outputs = self.vit(pixel_values=pixel_values)
-                pooled_output = outputs.pooler_output
-                logits = self.classifier(pooled_output)
-                return logits
+#             def forward(self, pixel_values):
+#                 outputs = self.vit(pixel_values=pixel_values)
+#                 pooled_output = outputs.pooler_output
+#                 logits = self.classifier(pooled_output)
+#                 return logits
 
-        return VisionTransformerNet(num_classes)
+#         return VisionTransformerNet(num_classes)
 
-    def get_transform(self):
-        """Transformations required for Vision Transformer."""
-        return transforms.Compose([
-            transforms.Resize((224, 224))  # Fixed input size for ViT
-        ])
+#     def get_transform(self):
+#         """Transformations required for Vision Transformer."""
+#         return transforms.Compose([
+#             transforms.Resize((224, 224))  # Fixed input size for ViT
+#         ])
 
 # CNNNet Implementation
 class CNNNet(nn.Module):

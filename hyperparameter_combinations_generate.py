@@ -11,9 +11,9 @@ csv_file_path = saving_module.convert_json_to_csv('results')
 hyperparameters = ["optimizer_type","problem_type","learning_rate","num_epochs","batch_size","epsilon","delta","clip_bound","seed"]
 tracker = HyperparameterTracker(csv_file_path,hyperparameters,'/scratch/project_2003275/Andrew_temp/Benchmarking-Differential-Privacy-Optimizers/results/hyperparameters_tracking.csv')
 tracker_file_name = tracker.extract_hyperparameters()
-optimizer_types = ['sgd']
-if optimizer_types[0] =='adam':
-    learning_rates = [0.000001,0.00001,0.0001,0.001] # adam
+optimizer_types = ['adambc']
+if optimizer_types[0] =='adambc':
+    learning_rates = [0.00001,0.0001,0.001] # adam
 else:
     learning_rates = [0.001, 0.01 , 0.1   ] 
 
