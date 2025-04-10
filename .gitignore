@@ -3,4 +3,5 @@ errorlog/
 data/
 __pycache__/
 results/
+combinations.txt
 
