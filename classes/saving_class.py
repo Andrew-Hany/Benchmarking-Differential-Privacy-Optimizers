@@ -112,7 +112,7 @@ class Saving:
                         # 'Testing_all_accuracies': data['Testing_all_accuracies'],
 
                         'final_epoch_test_loss':data['Testing_all_losses'][-1],
-                        'final_epoch_test_accuracy': data['Testing_all_accuracies'][-1],
+                        'final_epoch_test_accuracy': data['Testing_all_accuracies'][-1] if data['Testing_all_accuracies'] else [],
                         'final_epoch_train_loss':final_epoch_train_loss,
                         'final_epoch_train_accuracy':final_epoch_train_accuracy,
                         'elapsed_time': data['elapsed_time']

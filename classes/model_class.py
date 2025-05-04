@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 import torchvision.transforms as transforms
-
+import torch
 # Abstraction for Model Factories
 class ModelFactory(ABC):
     @abstractmethod

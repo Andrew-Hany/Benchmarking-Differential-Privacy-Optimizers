@@ -221,10 +221,10 @@ def reporting_wrapper(results_directory):
 #     delta=1e-5,
 #     learning_rate=0.01,
 #     clip_bound=1,
-#     batch_size=1024,
-#     num_epochs=1,
+#     batch_size=2048,
+#     num_epochs=2,
 #     target_epsilon=5,
-#     problem_type=1,
+#     problem_type=3,
 #     optimizer_type='sgd',
 #     seed=1,
 # )
