@@ -12,9 +12,17 @@ from abc import ABC, abstractmethod
 from Optimizers.Adam_optimizer.AdamBC import *
 from privacy_engines.Dice_privacy_engine import Dice_PrivacyEngine
 from privacy_engines.KFprivacy_engine import KF_PrivacyEngine
+from privacy_engines.Matrix_privacy_engine import Matrix_PrivacyEngine
 from .training_loops import TrainingOrchestrator
 from opacus.accountants.utils import get_noise_multiplier
 import opacus
+
+from opacus.accountants.rdp import RDPAccountant
+# Define extended alphas
+extended_alphas = [1 + x / 10.0 for x in range(1, 100)] + list(range(12, 64)) +   [ 70, 80, 90, 100,200, 300, 400, 512,1024,2048,3000]
+# Overwrite the default list used by RDPAccountant
+RDPAccountant.DEFAULT_ALPHAS = extended_alphas
+
 
 # Registry for optimizer-specific classes
 OptimizerRegistry = {}
@@ -327,6 +335,64 @@ class DP_KF_train_epsilon(BaseOptimizer_trainer):
         epsilon = privacy_engine.get_epsilon(delta)
         return epsilon,noise_multiplier, all_train_losses, all_train_accuracies,all_test_losses,all_test_accuracies,elapsed_time
 
+@register_optimizer("Matrix")
+class DP_Matrix_train_epsilon(BaseOptimizer_trainer):
+    @staticmethod
+    def train(
+        model: torch.nn.Module,
+        model_type,
+        train_loader: torch.utils.data.DataLoader,
+        test_loader:torch.utils.data.DataLoader,
+        learning_rate,
+        sample_rate,
+        criterion,
+        num_epochs: int,
+        target_epsilon: float,
+        clip_bound: float,
+        delta: float,
+        device,
+        accountant='prv',
+        normalize_clipping= False,
+        random_seed=474237,
+        
+        verbose=False,
+        **kwargs):
+
+        privacy_engine = Matrix_PrivacyEngine(
+            accountant=accountant,
+            # accountant='rdp',
+            secure_mode=False,  # Should be set to True for production use
+        )
+
+        noise_multiplier = get_noise_multiplier(
+                    target_epsilon=target_epsilon,
+                    target_delta=delta,
+                    sample_rate=sample_rate,
+                    epochs=num_epochs,
+                    accountant=privacy_engine.accountant.mechanism(),
+        )
+        optimizer = optim.SGD(model.parameters(), learning_rate)
+        rng = torch.Generator(device=device)
+        rng.manual_seed(int(random_seed))
+
+        model, optimizer, train_loader = privacy_engine.make_private_with_epsilon(
+            module=model,
+            optimizer=optimizer,
+            data_loader=train_loader,
+            target_epsilon=target_epsilon,
+            target_delta=delta,
+            epochs=num_epochs,
+            max_grad_norm=clip_bound,
+            noise_generator=rng,
+            loss_reduction="mean",
+            normalize_clipping = normalize_clipping,
+        )
+
+        orchestrator = TrainingOrchestrator()
+        all_train_losses, all_train_accuracies,all_test_losses,all_test_accuracies,elapsed_time = orchestrator.training_loop(model_type,num_epochs,train_loader,test_loader,model,criterion,optimizer,device,verbose=verbose)
+        epsilon = privacy_engine.get_epsilon(delta)
+        # all_train_losses, all_train_accuracies,all_test_losses,all_test_accuracies,elapsed_time =None,None,None,None,None
+        return epsilon,noise_multiplier, all_train_losses, all_train_accuracies,all_test_losses,all_test_accuracies,elapsed_time
 
 
 
@@ -359,8 +425,6 @@ class Training:
         )
         # we would use a secure RNG in production but here we can ignore it.
         warnings.filterwarnings("ignore", message="Secure RNG turned off.")
-        # # this accounting warning is not optimal but fine to ignore for this exampl
-        warnings.filterwarnings("ignore", message="Optimal order is the largest alpha.")
 
         #check if we have the optimizer
         optimizer_type = optimizer_type.upper()

@@ -160,47 +160,58 @@ def compute_sensitivity(C):
         return 1.0
     return torch.linalg.norm(C, ord=2).item()
 
-def apply_matrix( matrix_to_apply: Optional[torch.Tensor],list_grad_tensor: list) -> torch.Tensor:
-    """
-    Applies matrix B to grad_tensor.
-    
-    Args:
-        grad_tensor: PyTorch tensor (e.g., p.grad)
-        B: Square matrix of size (D, D), where D = number of elements in grad_tensor
-    
-    Returns:
-        transformed_tensor: Same shape as grad_tensor, after applying B
-    """
+def apply_matrix_C( matrix_to_apply: Optional[torch.Tensor],list_grad_tensor: list,list_noise_tensor: list) -> torch.Tensor:
 
-    
        
     reference_tensor = list_grad_tensor[-1]
     original_shape = reference_tensor.shape
     device = reference_tensor.device
     
-    D = int(reference_tensor.numel())  # Counts the total number of elements in p.summed_grad
+    D = int(reference_tensor.numel())  # Counts the total number of elements in p.summed_grad 
     num_iterations = len(list_grad_tensor) # number of iterations so far 
 
-    matrix_to_apply = matrix_to_apply[num_iterations-1].double() # # we need the right row at step t and Cast to double
-    matrix_to_apply = matrix_to_apply[0:num_iterations].double().to(device) # then we take the first columns that exist in the lower triangle, cast to double
+    matrix_to_apply = matrix_to_apply[0:num_iterations,0:num_iterations] # # we need the right row at step t and Cast to double
+    # print(matrix_to_apply)
     matrix_to_apply = matrix_to_apply.to(device) # make sure the matrix is in the right device as the grad_tensor
 
     flattened_gradients = []
+    flattened_noise = []
     for grad_tensor in list_grad_tensor:
         if grad_tensor.numel() != D:
             raise ValueError(
                 f"All tensors in list_grad_tensor must have the same number of elements ({D}). "
                 f"Found a tensor with {grad_tensor.numel()} elements."
             )
-        flattened_gradients.append(grad_tensor.detach().clone().view(D).double().to(device)) # Cast to double
+        flattened_gradients.append(grad_tensor.detach().clone().view(D).to(device)) # Cast to double
+    for grad_tensor in list_noise_tensor:
+        if grad_tensor.numel() != D:
+            raise ValueError(
+                f"All tensors in list_grad_tensor must have the same number of elements ({D}). "
+                f"Found a tensor with {grad_tensor.numel()} elements."
+            )
+        flattened_noise.append(grad_tensor.detach().clone().view(D).to(device)) # Cast to double
 
     stacked_gradients = torch.stack(flattened_gradients, dim=0)    # The shape of stacked_gradients will be (num_iterations, D).
+    stacked_noises = torch.stack(flattened_noise, dim=0)  
     # Apply matrix
     with torch.no_grad():
-        transformed_flat = matrix_to_apply @ stacked_gradients
+        transformed = matrix_to_apply @ stacked_gradients  # (txt) @ (t,d) = (t,d)
+
 
     # Reshape back to original shape
-    return transformed_flat.float().view(original_shape)
+    return (transformed + stacked_noises).float() # (txd) + (txd) = (t,d)
+
+def apply_matrix_B( matrix_to_apply: Optional[torch.Tensor],grad_tensor) -> torch.Tensor:
+
+
+
+    device = grad_tensor.device
+    matrix_to_apply = matrix_to_apply.to(device)
+    with torch.no_grad():
+        transformed_flat = matrix_to_apply @ grad_tensor #(1xt) x(txd) =(1xd)
+
+    # Reshape back to original shape
+    return transformed_flat.float()
 class DPOptimizer_Matrix(DPOptimizer):
     def __init__(
                 self,
@@ -256,24 +267,30 @@ class DPOptimizer_Matrix(DPOptimizer):
             if not hasattr(p, 'Q_last'): #Q= AG_dash + sens(C)BZ
                 p.Q_last = 0
 
+            
+
             # --- Append a detached clone of the current noise to this parameter's history ---
             p.noise_history.append(noise.detach().clone())
             # --- Append a detached clone of the current clipped gradient to this parameter's history ---
             p.summed_grad_history.append(p.summed_grad.detach().clone())
 
-            
-            Matrix_applied_summed_grad = apply_matrix(self.A_matrix,p.summed_grad_history) #
+        
+            Matrix_applied_summed_grad_noise_added = apply_matrix_C(self.C_matrix,p.summed_grad_history,p.noise_history) #CG_dash +Z
 
-            Matrix_applied_noise = apply_matrix(self.B_matrix,p.noise_history) #BZ
-            
-            Q = (Matrix_applied_summed_grad + Matrix_applied_noise).view_as(p)
-            #this should the p.grad that will be used in next steps hopefully
+
+            num_iterations = len(p.summed_grad_history) # number of iterations so far 
+
+            matrix_to_apply = self.B_matrix[num_iterations-1] # # we need the right row at step t and Cast to double
+            matrix_to_apply = matrix_to_apply[0:num_iterations] # then we take the first columns that exist in the lower triangle, cast to double
+             # make sure the matrix is in the right device as the grad_tensor
+            Q = apply_matrix_B(matrix_to_apply,Matrix_applied_summed_grad_noise_added).view(p.summed_grad_history[-1].shape).view_as(p)
+            # #this should the p.grad that will be used in next steps hopefully
             p.grad = Q - p.Q_last
 
-            #save the last Q for next step computation
+
+            # #save the last Q for next step computation
             p.Q_last = Q
 
-            # p.grad = (p.summed_grad + noise).view_as(p)
             _mark_as_processed(p.summed_grad)
 
 

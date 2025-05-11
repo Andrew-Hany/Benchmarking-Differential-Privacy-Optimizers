@@ -2,9 +2,7 @@
 from .MatrixSGD import DPOptimizer_Matrix
 
 
-def get_optimizer_class(
-    clipping: str, distributed: bool, grad_sample_mode: str = None, Dice: bool = False
-):
+def get_optimizer_class():
         return DPOptimizer_Matrix
 
 # we need to do the offline factorizatoin somewhere here

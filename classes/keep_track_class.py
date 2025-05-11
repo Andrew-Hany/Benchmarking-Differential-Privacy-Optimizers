@@ -18,7 +18,7 @@ class HyperparameterTracker:
         try:
             df = pd.read_csv(self.results_file)
         except:
-            print(f"Error: File not found at {self.results_file}") 
+            print(f"Error: Can not read {self.results_file} or it is empty") 
             return None 
 
         if df.empty:

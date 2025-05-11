@@ -166,9 +166,9 @@ def main_train_wrapper(
     if optimizer_type.lower() == 'dice':
         parameters["error_max_grad_norm"] = 1  # for Dice Optimizer
 
-    #saving the files and the results into .pth and .json
-    saving_module = Saving()
-    results = saving_module.save_results(results_directory,model,parameters, all_train_losses, all_train_accuracies,all_test_losses,all_test_accuracies,elapsed_time)
+    # #saving the files and the results into .pth and .json
+    # saving_module = Saving()
+    # results = saving_module.save_results(results_directory,model,parameters, all_train_losses, all_train_accuracies,all_test_losses,all_test_accuracies,elapsed_time)
 
 
 def reporting_wrapper(results_directory):
@@ -185,65 +185,32 @@ def reporting_wrapper(results_directory):
 #--------------------------------------------------------------------------------------------------
 # Running the main function
 
-# hyperparameters = ["optimizer_type", "problem_type", "learning_rate", "num_epochs", "batch_size", "epsilon", "delta", "clip_bound", "seed"]
-# tracker = HyperparameterTracker('/scratch/project_2003275/Andrew_temp/Benchmarking-Differential-Privacy-Optimizers/hyperparameter_combinations_generate.py',hyperparameters,'/scratch/project_2003275/Andrew_temp/Benchmarking-Differential-Privacy-Optimizers/results/hyperparameters_tracking.csv')
-
-# optimizer_types = ['sgd']
-# # learning_rates = np.logspace(np.log10(0.1), np.log10(0.7), num=4) #sgd
-# learning_rates = [0.001, 0.01 , 0.1  , 1.   ]
-# batch_sizes = [128, 256]
-# epsilons = [1, 5, 10]
-# seeds = [472368]
-
-# num_epochs = [10]
-# deltas = [1e-5]
-# clip_bounds = [1]
-# problem_types = [1]
-# torch.cuda.empty_cache()
-
-# for optimizer in optimizer_types:
-#     for problem in problem_types:
-#         for lr in learning_rates:
-#             for epoch in num_epochs:
-#                 for batch_size in batch_sizes:
-#                     for epsilon in epsilons:
-#                         for delta in deltas:
-#                             for clip_bound in clip_bounds:
-#                                 for seed in seeds:
-#                                     if not tracker.has_run(optimizer_type=optimizer, problem_type=problem, learning_rate=lr, num_epochs=epoch, batch_size=batch_size, epsilon=epsilon, delta=delta, clip_bound=clip_bound, seed=seed):
-#                                         main_train_wrapper(
-#                                             results_directory='results',
-#                                             delta=delta,
-#                                             learning_rate=lr,
-#                                             clip_bound=clip_bound,
-#                                             batch_size=batch_size,
-#                                             num_epochs=epoch,
-#                                             target_epsilon=epsilon,
-#                                             problem_type=problem,
-#                                             optimizer_type=optimizer,
-#                                             seed=seed,
-#                                         )
-             
-#                                     else:
-#                                         print('done before')
-#                                         print(optimizer, epsilon, batch_size, lr, seed, epoch, problem)
 
 
-# reporting_wrapper("results")
 
+main_train_wrapper(
+    results_directory='results',
+    delta=1e-5,
+    learning_rate=0.01,
+    clip_bound=1,
+    batch_size=256,
+    num_epochs=2,
+    target_epsilon=5,
+    problem_type=2,
+    optimizer_type='matrix',
+    seed=100,
+)
 
-# main_train_wrapper(
-#     results_directory='results',
-#     delta=1e-5,
-#     learning_rate=0.01,
-#     clip_bound=1,
-#     batch_size=256,
-#     num_epochs=1,
-#     target_epsilon=5,
-#     problem_type=2,
-#     optimizer_type='sgd',
-#     seed=50,
-# )
-
-
+main_train_wrapper(
+    results_directory='results',
+    delta=1e-5,
+    learning_rate=0.01,
+    clip_bound=1,
+    batch_size=256,
+    num_epochs=2,
+    target_epsilon=5,
+    problem_type=2,
+    optimizer_type='sgd',
+    seed=100,
+)
 
