@@ -194,7 +194,7 @@ main_train_wrapper(
     learning_rate=0.01,
     clip_bound=1,
     batch_size=1024,
-    num_epochs=100,
+    num_epochs=200,
     target_epsilon=5,
     problem_type=2,
     optimizer_type='matrix',
