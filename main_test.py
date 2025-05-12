@@ -187,30 +187,30 @@ def reporting_wrapper(results_directory):
 
 
 
-
+torch.cuda.empty_cache()
 main_train_wrapper(
     results_directory='results',
     delta=1e-5,
     learning_rate=0.01,
     clip_bound=1,
-    batch_size=256,
-    num_epochs=2,
+    batch_size=1024,
+    num_epochs=100,
     target_epsilon=5,
     problem_type=2,
     optimizer_type='matrix',
     seed=100,
 )
 
-main_train_wrapper(
-    results_directory='results',
-    delta=1e-5,
-    learning_rate=0.01,
-    clip_bound=1,
-    batch_size=256,
-    num_epochs=2,
-    target_epsilon=5,
-    problem_type=2,
-    optimizer_type='sgd',
-    seed=100,
-)
+# main_train_wrapper(
+#     results_directory='results',
+#     delta=1e-5,
+#     learning_rate=0.01,
+#     clip_bound=1,
+#     batch_size=1024,
+#     num_epochs=1,
+#     target_epsilon=5,
+#     problem_type=2,
+#     optimizer_type='sgd',
+#     seed=100,
+# )
 

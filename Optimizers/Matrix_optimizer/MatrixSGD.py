@@ -155,10 +155,6 @@ def _generate_noise(
             generator=generator,
         )
 
-def compute_sensitivity(C):
-    if C is None:
-        return 1.0
-    return torch.linalg.norm(C, ord=2).item()
 
 def apply_matrix( matrix_to_apply: Optional[torch.Tensor],list_grad_tensor: list) -> torch.Tensor:
     """
@@ -215,7 +211,7 @@ class DPOptimizer_Matrix(DPOptimizer):
                 normalize_clipping, 
                 A_matrix,
                 B_matrix,
-                C_matrix,
+                sens_C,
                  **kwargs):
         super().__init__(
             optimizer=optimizer,
@@ -229,8 +225,8 @@ class DPOptimizer_Matrix(DPOptimizer):
         )
         self.A_matrix = A_matrix
         self.B_matrix = B_matrix
-        self.C_matrix = C_matrix
-        self.historical_parameter_noises = []
+        self.sens_C = sens_C
+
     def add_noise(self):
         """
         Adds noise to clipped gradients. Stores clipped and noised result in ``p.grad``
@@ -239,9 +235,8 @@ class DPOptimizer_Matrix(DPOptimizer):
         for p in self.params:
             _check_processed_flag(p.summed_grad)
             
-            sens_C = compute_sensitivity(self.C_matrix)
             noise = _generate_noise(
-                std=self.noise_multiplier * self.max_grad_norm*sens_C,
+                std=self.noise_multiplier * self.max_grad_norm*self.sens_C,
                 reference=p.summed_grad,
                 generator=self.generator,
                 secure_mode=self.secure_mode,

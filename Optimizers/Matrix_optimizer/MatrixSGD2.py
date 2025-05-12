@@ -4,9 +4,6 @@ import math
 from torch.optim import Optimizer
 from opacus.optimizers import DPOptimizer
 from itertools import chain
-
-# from __future__ import annotations
-
 import logging
 from collections import defaultdict
 from typing import Callable, List, Optional, Union
@@ -15,7 +12,8 @@ import torch
 from opacus.optimizers.utils import params
 from torch import nn
 from torch.optim import Optimizer
-
+import gc
+import numpy as np
 
 logger = logging.getLogger(__name__)
 logger.disabled = True
@@ -155,63 +153,98 @@ def _generate_noise(
             generator=generator,
         )
 
-def compute_sensitivity(C):
-    if C is None:
-        return 1.0
-    return torch.linalg.norm(C, ord=2).item()
 
-def apply_matrix_C( matrix_to_apply: Optional[torch.Tensor],list_grad_tensor: list,list_noise_tensor: list) -> torch.Tensor:
-
-       
-    reference_tensor = list_grad_tensor[-1]
-    original_shape = reference_tensor.shape
-    device = reference_tensor.device
-    
-    D = int(reference_tensor.numel())  # Counts the total number of elements in p.summed_grad 
-    num_iterations = len(list_grad_tensor) # number of iterations so far 
-
-    matrix_to_apply = matrix_to_apply[0:num_iterations,0:num_iterations] # # we need the right row at step t and Cast to double
-    # print(matrix_to_apply)
-    matrix_to_apply = matrix_to_apply.to(device) # make sure the matrix is in the right device as the grad_tensor
-
-    flattened_gradients = []
-    flattened_noise = []
-    for grad_tensor in list_grad_tensor:
-        if grad_tensor.numel() != D:
-            raise ValueError(
-                f"All tensors in list_grad_tensor must have the same number of elements ({D}). "
-                f"Found a tensor with {grad_tensor.numel()} elements."
-            )
-        flattened_gradients.append(grad_tensor.detach().clone().view(D).to(device)) # Cast to double
-    for grad_tensor in list_noise_tensor:
-        if grad_tensor.numel() != D:
-            raise ValueError(
-                f"All tensors in list_grad_tensor must have the same number of elements ({D}). "
-                f"Found a tensor with {grad_tensor.numel()} elements."
-            )
-        flattened_noise.append(grad_tensor.detach().clone().view(D).to(device)) # Cast to double
-
-    stacked_gradients = torch.stack(flattened_gradients, dim=0)    # The shape of stacked_gradients will be (num_iterations, D).
-    stacked_noises = torch.stack(flattened_noise, dim=0)  
     # Apply matrix
     with torch.no_grad():
-        transformed = matrix_to_apply @ stacked_gradients  # (txt) @ (t,d) = (t,d)
+        transformed_flat = matrix_to_apply @ stacked_gradients
 
 
-    # Reshape back to original shape
-    return (transformed + stacked_noises).float() # (txd) + (txd) = (t,d)
-
-def apply_matrix_B( matrix_to_apply: Optional[torch.Tensor],grad_tensor) -> torch.Tensor:
-
-
-
-    device = grad_tensor.device
-    matrix_to_apply = matrix_to_apply.to(device)
-    with torch.no_grad():
-        transformed_flat = matrix_to_apply @ grad_tensor #(1xt) x(txd) =(1xd)
+    del matrix_to_apply
+    del stacked_gradients
 
     # Reshape back to original shape
-    return transformed_flat.float()
+    return transformed_flat.float().view(original_shape)
+
+def gpu_matrix_multiply(T:int,D:int,a_path: str, b_path: str, tile_size: int = 10240 ) -> torch.Tensor:
+    """
+    Performs matrix multiplication on the GPU using PyTorch, handling large matrices
+    that may not fit in GPU memory by tiling.
+    Loads matrices from disk, not from RAM.
+
+    Args:
+        a_path: Path to the first matrix (A) saved as a .pt file.
+        b_path: Path to the second matrix (B) saved as a .pt file.
+        tile_size: Size of the square tiles to use for processing on the GPU.
+
+    Returns:
+        Result of the matrix multiplication as a PyTorch tensor on the CPU.
+    """
+
+    b_np = np.load(a_path, mmap_mode='r')
+    z_np = np.load(b_path, mmap_mode='r')
+
+    result_cpu = torch.zeros((T, D), dtype=torch.float32, device="cpu")
+    print('passed')
+
+    num_tiles_m = math.ceil(T / tile_size)
+    num_tiles_k = math.ceil(T / tile_size)
+    num_tiles_n = math.ceil(D / tile_size)
+
+    print(f"Matrices shape: B({T}x{T}), Z({T}x{D})")
+    print(f"Using tile size: {tile_size}")
+    print(f"Number of tiles: M={num_tiles_m}, K={num_tiles_k}, N={num_tiles_n}")
+
+    # Check if CUDA is available
+    if not torch.cuda.is_available():
+        raise RuntimeError("CUDA is not available. Please ensure you have a compatible GPU and PyTorch with CUDA support installed.")
+
+    # Move the entire matrices to the CPU (already done above)
+    # Now process each tile on the GPU
+
+    for i in range(num_tiles_m):
+        for j in range(num_tiles_n):
+            c_row_start = i * tile_size
+            c_row_end = min((i + 1) * tile_size, T)
+            c_col_start = j * tile_size
+            c_col_end = min((j + 1) * tile_size, D)
+
+            for l in range(num_tiles_k):
+                a_row_start = i * tile_size
+                a_row_end = min((i + 1) * tile_size, T)
+                a_col_start = l * tile_size
+                a_col_end = min((l + 1) * tile_size, T)
+
+                b_row_start = l * tile_size
+                b_row_end = min((l + 1) * tile_size, T)
+                b_col_start = j * tile_size
+                b_col_end = min((j + 1) * tile_size, D)
+
+                # Extract tile from CPU
+                # Load the tile B_il from b_np
+                a_tile_cpu = b_np[a_row_start:a_row_end, a_col_start:a_col_end].copy()
+                # Load the tile Z_lj from z_np
+                b_tile_cpu = z_np[b_row_start:b_row_end, b_col_start:b_col_end].copy()
+
+                print((i * num_tiles_n * num_tiles_k) + (j * num_tiles_k) + l,'/',num_tiles_m*num_tiles_k*num_tiles_n)
+                # Move tile to GPU
+                a_tile_gpu = torch.from_numpy(a_tile_cpu).to("cuda")
+                b_tile_gpu = torch.from_numpy(b_tile_cpu).to("cuda")
+
+                # Perform matrix multiplication on GPU
+                c_tile_gpu = a_tile_gpu @ b_tile_gpu
+
+                # Move result back to CPU
+                c_tile_cpu = c_tile_gpu.cpu()
+
+                # Accumulate result
+                result_cpu[c_row_start:c_row_end, c_col_start:c_col_end] += c_tile_cpu
+
+                # Free up memory
+                del  a_tile_cpu,b_tile_cpu,a_tile_gpu, b_tile_gpu, c_tile_gpu, c_tile_cpu
+                torch.cuda.empty_cache()
+                gc.collect()
+
+    return result_cpu
 class DPOptimizer_Matrix(DPOptimizer):
     def __init__(
                 self,
@@ -224,9 +257,10 @@ class DPOptimizer_Matrix(DPOptimizer):
                 generator=None,
                 secure_mode: bool = False,
                 normalize_clipping, 
-                A_matrix,
+                # A_matrix,
                 B_matrix,
-                C_matrix,
+                sens_C,
+                num_steps,
                  **kwargs):
         super().__init__(
             optimizer=optimizer,
@@ -238,60 +272,119 @@ class DPOptimizer_Matrix(DPOptimizer):
             secure_mode=secure_mode,
             normalize_clipping=normalize_clipping
         )
-        self.A_matrix = A_matrix
+        # self.A_matrix = A_matrix
         self.B_matrix = B_matrix
-        self.C_matrix = C_matrix
-        self.historical_parameter_noises = []
+        self.sens_C = sens_C
+        self.num_steps =  num_steps
+        self.noise_history = None  # Will hold the precomputed noise for all steps
+        self.correlated_noise_history = None
+        self.current_step = 0      # Track which step we're on
+
+
+    def _generate_all_noise(self):
+        """
+        Precomputes correlated noise for all steps and stores it in self.correlated_noise_history.
+        Deletes all intermediate tensors to save memory.
+        """
+
+        device = 'cpu'
+
+        # Step 1: Generate raw noise for each step and parameter
+        noise_per_step = []
+        for _ in range(self.num_steps):
+            step_noise = []
+            for p in self.params:
+                noise = _generate_noise(
+                    std=self.noise_multiplier * self.max_grad_norm,
+                    reference=p.summed_grad,
+                    generator=self.generator,
+                    secure_mode=self.secure_mode,
+                )
+                step_noise.append(noise.to('cpu'))
+                del noise
+            noise_per_step.append(step_noise)
+        print('step 1 is done')
+        # Step 2: Flatten all parameters' noise into a single vector per step
+        T = self.num_steps
+        D = sum(p.numel() for p in self.params)  # Total number of elements across all parameters
+        Z = torch.zeros(T, D, device=device)
+
+        for step_idx in range(T):
+            flat_noise = torch.cat([n.view(-1) for n in noise_per_step[step_idx]])
+            Z[step_idx] = flat_noise
+
+        del noise_per_step
+        print('step 2 is done')
+        # Step 3: Multiply with B (T x T)
+        # self.B_matrix = self.B_matrix.to(device)
+        np.save("B_matrix.npy", self.B_matrix.numpy())
+        np.save("Z.npy", Z.numpy())
+
+        # Delete from RAM
+        del self.B_matrix
+        del Z
+        gc.collect()
+        torch.cuda.empty_cache()
+
+        print('passed')
+        correlated_Z = gpu_matrix_multiply(T,D,"B_matrix.npy", "Z.npy")
+
+
+        print('step 3 is done')
+        # Step 4: Reshape back to per-parameter structure
+        self.correlated_noise_history = []
+
+        for step_idx in range(T):
+            flat_correlated = correlated_Z[step_idx]
+            current_step_correlated = []
+
+            idx = 0
+            for p in self.params:
+                numel = p.numel()
+                current_step_correlated.append(flat_correlated[idx:idx + numel].view(p.shape))
+                idx += numel
+
+            self.correlated_noise_history.append(current_step_correlated)
+
+        print('step 4 is done')
+        # Step 5: Clean up memory
+        del correlated_Z
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+                
+
+
     def add_noise(self):
         """
         Adds noise to clipped gradients. Stores clipped and noised result in ``p.grad``
         """
+        
+        # If no noise history exists, generate it now
+        device = next(iter(self.params)).device
+        if self.correlated_noise_history is None:
+            print('Generating Noise start ...')
+            print('Pre-generating all the noise -- It might take some time but next steps will not')
+            self._generate_all_noise()
+            print('generation is done')
 
-        for p in self.params:
+        # Get the noise for the current step
+        step__noise_correlated = self.correlated_noise_history[self.current_step] #BZ
+        # Move the correlated noise to the same device as the model
+        step__noise_correlated = [n.to(device) for n in step__noise_correlated]
+        for i, p in enumerate(self.params):
             _check_processed_flag(p.summed_grad)
             
-            sens_C = compute_sensitivity(self.C_matrix)
-            noise = _generate_noise(
-                std=self.noise_multiplier * self.max_grad_norm*sens_C,
-                reference=p.summed_grad,
-                generator=self.generator,
-                secure_mode=self.secure_mode,
-            )
             # # --- Initialize p.noise_history if it doesn't exist ---
-            if not hasattr(p, 'noise_history'):
-                p.noise_history = []
+            if not hasattr(p, 'noise_last'):
+                p.noise_last = torch.zeros_like(step__noise_correlated[i])
 
-            # --- Initialize p.summed_grad_history if it doesn't exist ---
-            if not hasattr(p, 'summed_grad_history'):
-                p.summed_grad_history = []
-            if not hasattr(p, 'Q_last'): #Q= AG_dash + sens(C)BZ
-                p.Q_last = 0
-
-            
-
-            # --- Append a detached clone of the current noise to this parameter's history ---
-            p.noise_history.append(noise.detach().clone())
-            # --- Append a detached clone of the current clipped gradient to this parameter's history ---
-            p.summed_grad_history.append(p.summed_grad.detach().clone())
-
-        
-            Matrix_applied_summed_grad_noise_added = apply_matrix_C(self.C_matrix,p.summed_grad_history,p.noise_history) #CG_dash +Z
-
-
-            num_iterations = len(p.summed_grad_history) # number of iterations so far 
-
-            matrix_to_apply = self.B_matrix[num_iterations-1] # # we need the right row at step t and Cast to double
-            matrix_to_apply = matrix_to_apply[0:num_iterations] # then we take the first columns that exist in the lower triangle, cast to double
-             # make sure the matrix is in the right device as the grad_tensor
-            Q = apply_matrix_B(matrix_to_apply,Matrix_applied_summed_grad_noise_added).view(p.summed_grad_history[-1].shape).view_as(p)
-            # #this should the p.grad that will be used in next steps hopefully
-            p.grad = Q - p.Q_last
-
-
-            # #save the last Q for next step computation
-            p.Q_last = Q
-
+            p.grad = (p.summed_grad - p.noise_last + step__noise_correlated[i]).view_as(p)
+            p.noise_last = step__noise_correlated[i]
+            # p.grad = (p.summed_grad + noise).view_as(p)
+            # p.grad = (p.summed_grad + step_correlated[i]).view_as(p)
             _mark_as_processed(p.summed_grad)
+        del step__noise_correlated
+        self.current_step += 1
 
 
     def pre_step(

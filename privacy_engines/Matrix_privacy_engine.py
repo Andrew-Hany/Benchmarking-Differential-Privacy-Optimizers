@@ -29,8 +29,10 @@ from torch import nn, optim
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader
 
-from Optimizers.Matrix_optimizer._init import get_optimizer_class
+from Optimizers.Matrix_optimizer._init import *
 from Optimizers.Matrix_optimizer.MatrixSGD import DPOptimizer_Matrix
+
+
 class Matrix_PrivacyEngine(PrivacyEngine):
     def __init__(self, *, accountant: str = "prv", secure_mode: bool = False):
         super().__init__(accountant=accountant, secure_mode=secure_mode)
@@ -346,17 +348,16 @@ class Matrix_PrivacyEngine(PrivacyEngine):
 
 
         
-        # get T
         # A = low triangle (TxT)
         # B = A (TxT)
         # C = I (TxT)
+
         T_calculated =kwargs['epochs']*kwargs['optimizer_steps_per_epoch']
-        # print('t',kwargs['epochs'],kwargs['optimizer_steps_per_epoch'],T_calculated)
-
-        C_matrix_T_by_T = torch.eye(T_calculated)
-
-        A_matrix_T_by_T = torch.tril(torch.ones(T_calculated, T_calculated))
-        B_matrix_T_by_T = A_matrix_T_by_T
+        print(T_calculated)
+        
+        # C_matrix_T_by_T = torch.eye(T_calculated, device='cuda').to('cpu') if torch.cuda.is_available() else torch.eye(T_calculated, device='cpu')
+        sens_C = compute_sensitivity(None)
+        B_matrix_T_by_T = torch.tril(torch.ones(T_calculated, T_calculated, device='cpu'))
         return optim_class(
             optimizer=optimizer,
             noise_multiplier=noise_multiplier,
@@ -366,8 +367,9 @@ class Matrix_PrivacyEngine(PrivacyEngine):
             generator=generator,
             secure_mode=self.secure_mode,
             normalize_clipping=normalize_clipping,
-            A_matrix= A_matrix_T_by_T,
+            # A_matrix= A_matrix_T_by_T,
             B_matrix =B_matrix_T_by_T,
-            C_matrix=C_matrix_T_by_T,
+            sens_C=sens_C,
+            num_steps=T_calculated,
             **kwargs,
         )
