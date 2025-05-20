@@ -6,8 +6,8 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --gres=gpu:a100:1
-#SBATCH --time=5:00:00
-#SBATCH --array=0-198
+#SBATCH --time=12:00:00
+#SBATCH --array=0-10
 #SBATCH --partition=gpusmall  
 
 mkdir -p errorlog

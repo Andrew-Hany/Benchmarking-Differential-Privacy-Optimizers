@@ -24,7 +24,7 @@ from Optimizers.Adam_optimizer.AdamBC import *
 from classes.saving_class import *
 from classes.reporting_class import *
 from classes.keep_track_class import *
-from transformers import *
+from classes.transforms import *
 
 
 import torch
@@ -41,7 +41,7 @@ import time
 
 
 
-def generate_and_save_images(model, data_loader, filename='generated_images.png', nrow=8):
+def generate_and_save_images(model, data_loader, filename='generated_images.png', nrow=8,device='cuda'):
     model.eval()
     with torch.no_grad():
         # Get a batch of images from the data loader
@@ -144,7 +144,7 @@ def main_train_wrapper(
     print("Epsilon: {}, Delta: {}, Time Taken for Training {}".format(epsilon, delta,elapsed_time))
 
     # if model_type.lower() == 'vae':
-    #     generate_and_save_images(model, train_loader)
+    generate_and_save_images(model, train_loader)
 
     # add noise multiplier
     parameters = {
@@ -188,16 +188,29 @@ def reporting_wrapper(results_directory):
 
 
 torch.cuda.empty_cache()
+# main_train_wrapper(
+#     results_directory='results',
+#     delta=1e-5,
+#     learning_rate=0.01,
+#     clip_bound=1,
+#     batch_size=1024,
+#     num_epochs=1,
+#     target_epsilon=5,
+#     problem_type=3,
+#     optimizer_type='matrix',
+#     seed=100,
+# )
+
 main_train_wrapper(
     results_directory='results',
     delta=1e-5,
-    learning_rate=0.01,
+    learning_rate=0.0001,
     clip_bound=1,
-    batch_size=1024,
-    num_epochs=200,
-    target_epsilon=5,
-    problem_type=2,
-    optimizer_type='matrix',
+    batch_size=128,
+    num_epochs=3,
+    target_epsilon=10,
+    problem_type=3,
+    optimizer_type='adambc',
     seed=100,
 )
 

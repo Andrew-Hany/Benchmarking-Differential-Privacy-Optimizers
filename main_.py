@@ -24,7 +24,7 @@ from Optimizers.Adam_optimizer.AdamBC import *
 from classes.saving_class import *
 from classes.reporting_class import *
 from classes.keep_track_class import *
-from transformers import *
+# from transformers import *
 
 
 import torch
@@ -240,7 +240,7 @@ def reporting_wrapper(results_directory):
 #     batch_size=256,
 #     num_epochs=1,
 #     target_epsilon=5,
-#     problem_type=2,
+#     problem_type=3,
 #     optimizer_type='sgd',
 #     seed=50,
 # )

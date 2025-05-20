@@ -10,6 +10,7 @@ import opacus
 import sys
 import os
 import time
+import math
 
 from opacus.utils.batch_memory_manager import BatchMemoryManager
 
@@ -131,28 +132,27 @@ class VAETrainingLoop(BaseTrainingLoop):
             ) as memory_safe_loader:
                 for x, _ in tqdm(memory_safe_loader, desc=f'{epoch+1}/{num_epochs}'):
                     x = x.to(device)
-                    if use_closure:
-                        def closure():
-                            recon_x, mu, logvar = model(x)  # Forward pass
-                            loss = criterion(recon_x, x, mu, logvar)  # Compute the loss
-                            loss.backward()  # Backward pass
-                            return loss, recon_x
-                        loss, recon_x = optimizer.step(closure)
-                        optimizer.zero_grad()
-                    else:
-                        recon_x, mu, logvar = model(x)
-                        loss = criterion(recon_x, x, mu, logvar)
-                        loss.backward()
-                        optimizer.step()
-                        optimizer.zero_grad()
-                    physical_batch_losses.append(loss.item())
+
+                    recon_x, mu, logvar = model(x)
+                    # loss = criterion(recon_x, x, mu, logvar)
+                    loss, recon_loss_val, kl_div_val = criterion(recon_x, x, mu, logvar)
+                    loss.backward()
+                    optimizer.step()
+                    optimizer.zero_grad()
+
+                    physical_batch_losses.append((loss.item(), recon_loss_val, kl_div_val))
 
                     # If this was the last step in a logical batch
                     # _is_last_step_skipped checks if .step is called or not
                     # if it is not skipped (false), it is the logical batch
                     if not getattr(optimizer, "_is_last_step_skipped", False): 
-                        avg_loss = sum(physical_batch_losses) / len(physical_batch_losses)
-                        logical_batch_losses.append(avg_loss)
+                        # Average each component
+                        avg_loss = sum([l[0] for l in physical_batch_losses]) / len(physical_batch_losses)
+                        avg_recon = sum([l[1] for l in physical_batch_losses]) / len(physical_batch_losses)
+                        avg_kl = sum([l[2] for l in physical_batch_losses]) / len(physical_batch_losses)
+
+                        logical_batch_losses.append((avg_loss, avg_recon, avg_kl))
+                        physical_batch_losses.clear()
                         
 
                 # Save training metrics
@@ -162,7 +162,12 @@ class VAETrainingLoop(BaseTrainingLoop):
                 all_test_losses.append(test_loss)
 
                 if verbose:
-                    print(f"Epoch {epoch + 1}, Loss = {np.mean(logical_batch_losses)},Test Loss = {test_loss}")
+                    t_l, r, k = zip(*logical_batch_losses)
+                    print(f"Epoch {epoch+1}, Total={np.mean(t_l):.4f}, Recon={np.mean(r):.4f}, KL={np.mean(k):.4f}, Test Loss={test_loss[0]:.4f}")
+                    if math.isnan(np.mean(r)) or math.isnan(np.mean(k)):
+                        return all_train_losses, [],all_test_losses,[]
+
+
         return all_train_losses, [],all_test_losses,[]
 
 # Training Orchestrator

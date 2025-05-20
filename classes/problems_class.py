@@ -163,41 +163,13 @@ class Problem3(ProblemDefinition):
         def vae_loss_function(recon_x, x, mu, logvar):
             recon_loss = F.mse_loss(recon_x, x, reduction='sum')
             kl_div = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-            return recon_loss + kl_div
+            total_loss = recon_loss + kl_div
+            return total_loss, recon_loss.item(), kl_div.item()
         return vae_loss_function
     @property
     def problem_name(self):
         return "fashion_mnist_vae"
 
-# Problem 4: MNIST VAE
-@register_problem(4)
-class Problem4(ProblemDefinition):
-    @property
-    def data_provider(self):
-        return MNISTProvider
-
-    @property
-    def model_factory(self):
-        return ConvVAEFactory
-
-    @property
-    def kwargs(self):
-        return {"latent_dim": 2}
-
-    @property
-    def model_type(self):
-        return "vae"
-
-    @property
-    def criterion(self):
-        def vae_loss_function(recon_x, x, mu, logvar):
-            recon_loss = F.mse_loss(recon_x, x, reduction='sum')
-            kl_div = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-            return recon_loss + kl_div
-        return vae_loss_function
-    @property
-    def problem_name(self):
-        return "mnist_vae"
 
 #Problem Class
 class Problem:

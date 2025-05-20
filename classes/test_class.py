@@ -52,19 +52,28 @@ class ClassificationTester(Tester):
 
 @register_tester("vae")
 class VAETester(Tester):
+
     def test(self, model, criterion, test_loader, device):
         model.eval()
-        losses, total_size = [], 0
+        total_loss, total_recon, total_kl, total_size = 0.0, 0.0, 0.0, 0
         with torch.no_grad():
             for x, _ in test_loader:
                 x = x.to(device)
-                total_size += len(x)
+                batch_size = x.size(0)
                 recon_x, mu, logvar = model(x)
-                loss = criterion(recon_x, x, mu, logvar)
-                losses.append(loss.item() * x.size(0))
-        avg_loss = sum(losses) / total_size
-        return avg_loss, None
- 
+
+                loss, recon_loss, kl_div = criterion(recon_x, x, mu, logvar)
+
+                total_loss += loss.item() * batch_size
+                total_recon += recon_loss * batch_size
+                total_kl += kl_div * batch_size
+                total_size += batch_size
+
+        avg_loss = total_loss / total_size
+        avg_recon = total_recon / total_size
+        avg_kl = total_kl / total_size
+
+        return (avg_loss, avg_recon, avg_kl), None
 class TestManager:
     def test(self, model_type: str, model, criterion, test_loader, device):
         """

@@ -15,6 +15,7 @@ from torch.optim import Optimizer
 import gc
 import numpy as np
 import tqdm
+import os
 
 logger = logging.getLogger(__name__)
 logger.disabled = True
@@ -166,7 +167,7 @@ def _generate_noise(
     # Reshape back to original shape
     return transformed_flat.float().view(original_shape)
 
-def gpu_matrix_multiply(T: int, D: int, a_path: str, b_path: str, out_path: str, tile_size: int = 5120) -> None:
+def gpu_matrix_multiply(T: int, D: int, a_path: str, b_path: str, out_path: str, tile_size: int = 16384) -> None:
     """
     Performs matrix multiplication on the GPU using PyTorch, handling large matrices
     by tiling. Loads input matrices (.npy) using memory mapping and writes the
@@ -188,7 +189,8 @@ def gpu_matrix_multiply(T: int, D: int, a_path: str, b_path: str, out_path: str,
     # --- Load input matrices using memory mapping ---
     # Assumes files exist and are correct .npy format/shape
     a_np = np.load(a_path, mmap_mode='r')
-    b_np = np.load(b_path, mmap_mode='r')
+    # b_np = np.load(b_path, mmap_mode='r')
+    b_np = np.memmap(b_path, dtype=np.float32, mode='r', shape=(T, D))
 
     # --- Create memory-mapped array for the result ---
     # Assumes directory exists and write permissions are okay
@@ -235,19 +237,22 @@ def gpu_matrix_multiply(T: int, D: int, a_path: str, b_path: str, out_path: str,
 
                 print((i * num_tiles_n * num_tiles_k) + (j * num_tiles_k) + k,'/',num_tiles_m*num_tiles_k*num_tiles_n)
                 # Extract tiles from input memory maps
-                a_tile_cpu_np = a_np[a_row_start:a_row_end, a_col_start:a_col_end].copy()
+                a_tile_cpu_np = a_np[a_row_start:a_row_end, a_col_start:a_col_end]
                 b_tile_cpu_np = b_np[b_row_start:b_row_end, b_col_start:b_col_end].copy()
 
                 # Skip if tiles ended up empty (can happen at edges)
                 if a_tile_cpu_np.size == 0 or b_tile_cpu_np.size == 0:
                     continue
 
-                # Move tiles to GPU
-                a_tile_gpu = torch.from_numpy(a_tile_cpu_np.astype(np.float32)).to("cuda")
-                b_tile_gpu = torch.from_numpy(b_tile_cpu_np.astype(np.float32)).to("cuda")
+                # Use pin_memory for faster transfer
+                a_tile_gpu = torch.from_numpy(a_tile_cpu_np.astype(np.float32)).pin_memory().to("cuda")
+                b_tile_gpu = torch.from_numpy(b_tile_cpu_np.astype(np.float32)).pin_memory().to("cuda")
+
+                print('transfer __done')
 
                 # Perform multiplication on GPU
                 c_tile_gpu = a_tile_gpu @ b_tile_gpu
+                torch.cuda.synchronize()
 
                 # Move result tile back to CPU
                 c_tile_cpu_tensor = c_tile_gpu.cpu()
@@ -257,9 +262,9 @@ def gpu_matrix_multiply(T: int, D: int, a_path: str, b_path: str, out_path: str,
                 result_mm[c_row_start:c_row_end, c_col_start:c_col_end] += c_tile_cpu_np
 
                 # Free up memory proactively
-                del a_tile_cpu_np, b_tile_cpu_np, a_tile_gpu, b_tile_gpu, c_tile_gpu, c_tile_cpu_tensor, c_tile_cpu_np
-                torch.cuda.empty_cache()
-                gc.collect() # Usually not needed
+            #     del a_tile_cpu_np, b_tile_cpu_np, a_tile_gpu, b_tile_gpu, c_tile_gpu, c_tile_cpu_tensor, c_tile_cpu_np
+            #     torch.cuda.empty_cache()
+            # gc.collect() # Usually not needed
 
     # --- Finalization ---
     # Ensure all writes are flushed to disk
@@ -321,17 +326,84 @@ class DPOptimizer_Matrix(DPOptimizer):
             idx += numel
         return current_step
         
+    # def _generate_all_noise(self):
+    #     """
+    #     Precomputes correlated noise for all steps and stores it in self.correlated_noise_history.
+    #     Deletes all intermediate tensors to save memory.
+    #     """
+
+    #     device = 'cpu'
+
+    #     # Step 1: Generate raw noise for each step and parameter
+    #     noise_per_step = []
+    #     for _ in tqdm.tqdm(range(self.num_steps), desc='raw noise'):
+    #         step_noise = []
+    #         for p in self.params:
+    #             noise = _generate_noise(
+    #                 std=self.noise_multiplier * self.max_grad_norm,
+    #                 reference=p.summed_grad,
+    #                 generator=self.generator,
+    #                 secure_mode=self.secure_mode,
+    #             )
+    #             step_noise.append(noise.to('cpu'))
+    #             del noise
+    #         noise_per_step.append(step_noise)
+    #         # del step_noise
+    #         # gc.collect()
+    #     print('step 1 is done')
+    #     # Step 2: Flatten all parameters' noise into a single vector per step
+    #     T = self.num_steps
+    #     D = sum(p.numel() for p in self.params)  # Total number of elements across all parameters
+    #     Z = torch.zeros(T, D, device=device)
+
+    #     for step_idx in range(T):
+    #         flat_noise = torch.cat([n.view(-1) for n in noise_per_step[step_idx]])
+    #         Z[step_idx] = flat_noise
+
+    #     del noise_per_step
+    #     print('step 2 is done')
+    #     # Step 3: Multiply with B (T x T)
+    #     np.save("B_matrix.npy", self.B_matrix.numpy())
+    #     np.save("Z.npy", Z.numpy())
+
+    #     # Delete from RAM
+    #     del self.B_matrix
+    #     del Z
+    #     gc.collect()
+    #     torch.cuda.empty_cache()
+
+    #     gpu_matrix_multiply(T,D,"B_matrix.npy", "Z.npy",'correlated_Z.raw')
+  
+    #     print('step 3 is done')
+
+
+
     def _generate_all_noise(self):
         """
-        Precomputes correlated noise for all steps and stores it in self.correlated_noise_history.
-        Deletes all intermediate tensors to save memory.
+        Precomputes correlated noise for all steps and stores it in a memory-mapped file.
+        Uses memory-mapped arrays to avoid loading everything into RAM.
         """
 
-        device = 'cpu'
+        # Step 1: Define T and D
+        T = self.num_steps
+        D = sum(p.numel() for p in self.params)
+        print(T,D)
+        # Step 2: Define file paths
+        # noise_file = "noise_output.raw"
+        B_file = "B_matrix.npy"
+        Z_file = "Z.npy"
+        result_file = "correlated_Z.raw"
 
-        # Step 1: Generate raw noise for each step and parameter
-        noise_per_step = []
-        for _ in tqdm.tqdm(range(self.num_steps), desc='raw noise'):
+        # Step 3: Create memory-mapped array for noise (T x D)
+
+
+        Z_mm = np.memmap(Z_file, dtype=np.float32, mode='w+', shape=(T, D))
+        Z_mm[:] = 0.0
+        Z_mm.flush()
+
+        # Step 4: Generate and save noise incrementally
+        
+        for step_idx in tqdm.tqdm(range(T), desc='Generating noise'):
             step_noise = []
             for p in self.params:
                 noise = _generate_noise(
@@ -342,34 +414,42 @@ class DPOptimizer_Matrix(DPOptimizer):
                 )
                 step_noise.append(noise.to('cpu'))
                 del noise
-            noise_per_step.append(step_noise)
-            # del step_noise
-            # gc.collect()
-        print('step 1 is done')
-        # Step 2: Flatten all parameters' noise into a single vector per step
-        T = self.num_steps
-        D = sum(p.numel() for p in self.params)  # Total number of elements across all parameters
-        Z = torch.zeros(T, D, device=device)
 
-        for step_idx in range(T):
-            flat_noise = torch.cat([n.view(-1) for n in noise_per_step[step_idx]])
-            Z[step_idx] = flat_noise
+            # Flatten and write to memory-mapped file
+            flat_noise = np.concatenate([p.numpy().ravel() for p in step_noise])
+            Z_mm[step_idx] = flat_noise
+            Z_mm.flush()
 
-        del noise_per_step
-        print('step 2 is done')
-        # Step 3: Multiply with B (T x T)
-        np.save("B_matrix.npy", self.B_matrix.numpy())
-        np.save("Z.npy", Z.numpy())
+            # Clean up
+            del step_noise, flat_noise
+        del Z_mm
+        gc.collect()
+        print("Step 1: Raw Noise generated and saved to disk")
 
-        # Delete from RAM
+        # Step 5: Save B_matrix as .npy (already on CPU)
+        
+        B_np = self.B_matrix.numpy()
+        
+        np.save(B_file, B_np)
+        # np.save(Z_file, Z_mm)
         del self.B_matrix
-        del Z
+        
         gc.collect()
         torch.cuda.empty_cache()
 
-        gpu_matrix_multiply(T,D,"B_matrix.npy", "Z.npy",'correlated_Z.raw')
-  
-        print('step 3 is done')
+        print("Step 2: B_matrix saved to disk")
+
+        # Step 6: Run GPU matrix multiplication
+        gpu_matrix_multiply(
+            T=T,
+            D=D,
+            a_path=B_file,
+            b_path=Z_file,
+            out_path=result_file,
+            # tile_size=1024
+        )
+
+        print("Step 3: Matrix multiplication completed")
 
 
     def add_noise(self):
