@@ -3,6 +3,7 @@ import torch
 import math
 from torch.optim import Optimizer
 from opacus.optimizers import DPOptimizer
+from opacus.optimizers.optimizer import _mark_as_processed, _check_processed_flag_tensor,_check_processed_flag,_generate_noise
 from itertools import chain
 import logging
 from collections import defaultdict
@@ -21,151 +22,8 @@ logger = logging.getLogger(__name__)
 logger.disabled = True
 
 
-def _mark_as_processed(obj: Union[torch.Tensor, List[torch.Tensor]]):
-    """
-    Marks parameters that have already been used in the optimizer step.
-
-    DP-SGD puts certain restrictions on how gradients can be accumulated. In particular,
-    no gradient can be used twice - client must call .zero_grad() between
-    optimizer steps, otherwise privacy guarantees are compromised.
-    This method marks tensors that have already been used in optimizer steps to then
-    check if zero_grad has been duly called.
-
-    Notes:
-          This is used to only mark ``p.grad_sample`` and ``p.summed_grad``
-
-    Args:
-        obj: tensor or a list of tensors to be marked
-    """
-
-    if isinstance(obj, torch.Tensor):
-        obj._processed = True
-    elif isinstance(obj, list):
-        for x in obj:
-            x._processed = True
-def _check_processed_flag_tensor(x: torch.Tensor):
-    """
-    Checks if this gradient tensor has been previously used in optimization step.
-
-    See Also:
-        :meth:`~opacus.optimizers.optimizer._mark_as_processed`
-
-    Args:
-        x: gradient tensor
-
-    Raises:
-        ValueError
-            If tensor has attribute ``._processed`` previously set by
-            ``_mark_as_processed`` method
-    """
-
-    if hasattr(x, "_processed"):
-        raise ValueError(
-            "Gradients haven't been cleared since the last optimizer step. "
-            "In order to obtain privacy guarantees you must call optimizer.zero_grad()"
-            "on each step"
-        )
-def _check_processed_flag(obj: Union[torch.Tensor, List[torch.Tensor]]):
-    """
-    Checks if this gradient tensor (or a list of tensors) has been previously
-    used in optimization step.
-
-    See Also:
-        :meth:`~opacus.optimizers.optimizer._mark_as_processed`
-
-    Args:
-        x: gradient tensor or a list of tensors
-
-    Raises:
-        ValueError
-            If tensor (or at least one tensor from the list) has attribute
-            ``._processed`` previously set by ``_mark_as_processed`` method
-    """
-
-    if isinstance(obj, torch.Tensor):
-        _check_processed_flag_tensor(obj)
-    elif isinstance(obj, list):
-        for x in obj:
-            _check_processed_flag_tensor(x)
 
 
-def _generate_noise(
-    std: float,
-    reference: torch.Tensor,
-    generator=None,
-    secure_mode: bool = False,
-) -> torch.Tensor:
-    """
-    Generates noise according to a Gaussian distribution with mean 0
-
-    Args:
-        std: Standard deviation of the noise
-        reference: The reference Tensor to get the appropriate shape and device
-            for generating the noise
-        generator: The PyTorch noise generator
-        secure_mode: boolean showing if "secure" noise need to be generated
-            (see the notes)
-
-    Notes:
-        If `secure_mode` is enabled, the generated noise is also secure
-        against the floating point representation attacks, such as the ones
-        in https://arxiv.org/abs/2107.10138 and https://arxiv.org/abs/2112.05307.
-        The attack for Opacus first appeared in https://arxiv.org/abs/2112.05307.
-        The implemented fix is based on https://arxiv.org/abs/2107.10138 and is
-        achieved through calling the Gaussian noise function 2*n times, when n=2
-        (see section 5.1 in https://arxiv.org/abs/2107.10138).
-
-        Reason for choosing n=2: n can be any number > 1. The bigger, the more
-        computation needs to be done (`2n` Gaussian samples will be generated).
-        The reason we chose `n=2` is that, `n=1` could be easy to break and `n>2`
-        is not really necessary. The complexity of the attack is `2^p(2n-1)`.
-        In PyTorch, `p=53` and so complexity is `2^53(2n-1)`. With `n=1`, we get
-        `2^53` (easy to break) but with `n=2`, we get `2^159`, which is hard
-        enough for an attacker to break.
-    """
-    zeros = torch.zeros(reference.shape, device=reference.device)
-    if std == 0:
-        return zeros
-    # TODO: handle device transfers: generator and reference tensor
-    # could be on different devices
-    if secure_mode:
-        torch.normal(
-            mean=0,
-            std=std,
-            size=(1, 1),
-            device=reference.device,
-            generator=generator,
-        )  # generate, but throw away first generated Gaussian sample
-        sum = zeros
-        for _ in range(4):
-            sum += torch.normal(
-                mean=0,
-                std=std,
-                size=reference.shape,
-                device=reference.device,
-                generator=generator,
-            )
-        return sum / 2
-    else:
-        return torch.normal(
-            mean=0,
-            std=std,
-            size=reference.shape,
-            device=reference.device,
-            generator=generator,
-        )
-
-
-    # Apply matrix
-    with torch.no_grad():
-        transformed_flat = matrix_to_apply @ stacked_gradients
-
-
-    del matrix_to_apply
-    del stacked_gradients
-
-    # Reshape back to original shape
-    return transformed_flat.float().view(original_shape)
 
 def gpu_matrix_multiply(T: int, D: int, a_path: str, b_path: str, out_path: str, tile_size: int = 16384) -> None:
     """
@@ -284,6 +142,7 @@ class DPOptimizer_Matrix(DPOptimizer):
                 normalize_clipping, 
                 # A_matrix,
                 B_matrix,
+                B_path,
                 sens_C,
                 num_steps,
                  **kwargs):
@@ -299,6 +158,8 @@ class DPOptimizer_Matrix(DPOptimizer):
         )
         # self.A_matrix = A_matrix
         self.B_matrix = B_matrix
+        self.B_path  = B_path
+
         self.sens_C = sens_C
         self.num_steps =  num_steps
         self.noise_history = None  # Will hold the precomputed noise for all steps
@@ -306,16 +167,22 @@ class DPOptimizer_Matrix(DPOptimizer):
         self.current_step = 0      # Track which step we're on
 
     def get_correlated_step(self,step_idx, T, D, memmap_path="correlated_Z.raw"):
+        """
+        Get the the curreny step correlated noise from the resulted matrix from B@Z
+        """
         # Load the full matrix as a memory-mapped array
         correlated_Z = np.memmap(memmap_path, dtype=np.float32, mode='r', shape=(T, D))
         
         # Get the row corresponding to this step
-        flat_tensor = correlated_Z[step_idx].copy()  # Copy to avoid issues with view
+        flat_np = correlated_Z[step_idx].copy()  # Copy to avoid issues with view
 
-        return flat_tensor
+        return flat_np
 
-    # Then reshape it into parameter shapes
+
     def reshape_flat_to_params(self,flat_tensor, params):
+        """
+        reshape a flat tensor for the current step into parameter shapes
+        """
         current_step = []
         idx = 0
         for p in params:
@@ -326,83 +193,26 @@ class DPOptimizer_Matrix(DPOptimizer):
             idx += numel
         return current_step
         
-    # def _generate_all_noise(self):
-    #     """
-    #     Precomputes correlated noise for all steps and stores it in self.correlated_noise_history.
-    #     Deletes all intermediate tensors to save memory.
-    #     """
-
-    #     device = 'cpu'
-
-    #     # Step 1: Generate raw noise for each step and parameter
-    #     noise_per_step = []
-    #     for _ in tqdm.tqdm(range(self.num_steps), desc='raw noise'):
-    #         step_noise = []
-    #         for p in self.params:
-    #             noise = _generate_noise(
-    #                 std=self.noise_multiplier * self.max_grad_norm,
-    #                 reference=p.summed_grad,
-    #                 generator=self.generator,
-    #                 secure_mode=self.secure_mode,
-    #             )
-    #             step_noise.append(noise.to('cpu'))
-    #             del noise
-    #         noise_per_step.append(step_noise)
-    #         # del step_noise
-    #         # gc.collect()
-    #     print('step 1 is done')
-    #     # Step 2: Flatten all parameters' noise into a single vector per step
-    #     T = self.num_steps
-    #     D = sum(p.numel() for p in self.params)  # Total number of elements across all parameters
-    #     Z = torch.zeros(T, D, device=device)
-
-    #     for step_idx in range(T):
-    #         flat_noise = torch.cat([n.view(-1) for n in noise_per_step[step_idx]])
-    #         Z[step_idx] = flat_noise
-
-    #     del noise_per_step
-    #     print('step 2 is done')
-    #     # Step 3: Multiply with B (T x T)
-    #     np.save("B_matrix.npy", self.B_matrix.numpy())
-    #     np.save("Z.npy", Z.numpy())
-
-    #     # Delete from RAM
-    #     del self.B_matrix
-    #     del Z
-    #     gc.collect()
-    #     torch.cuda.empty_cache()
-
-    #     gpu_matrix_multiply(T,D,"B_matrix.npy", "Z.npy",'correlated_Z.raw')
-  
-    #     print('step 3 is done')
-
-
-
     def _generate_all_noise(self):
         """
         Precomputes correlated noise for all steps and stores it in a memory-mapped file.
         Uses memory-mapped arrays to avoid loading everything into RAM.
         """
 
-        # Step 1: Define T and D
+        
         T = self.num_steps
         D = sum(p.numel() for p in self.params)
-        print(T,D)
-        # Step 2: Define file paths
-        # noise_file = "noise_output.raw"
+        
         B_file = "B_matrix.npy"
         Z_file = "Z.npy"
         result_file = "correlated_Z.raw"
 
-        # Step 3: Create memory-mapped array for noise (T x D)
-
-
+        # Create memory-mapped array for noise (T x D)
         Z_mm = np.memmap(Z_file, dtype=np.float32, mode='w+', shape=(T, D))
         Z_mm[:] = 0.0
         Z_mm.flush()
 
-        # Step 4: Generate and save noise incrementally
-        
+        # Generate and save noise incrementally
         for step_idx in tqdm.tqdm(range(T), desc='Generating noise'):
             step_noise = []
             for p in self.params:
@@ -426,30 +236,30 @@ class DPOptimizer_Matrix(DPOptimizer):
         gc.collect()
         print("Step 1: Raw Noise generated and saved to disk")
 
-        # Step 5: Save B_matrix as .npy (already on CPU)
+        # Save B_matrix as .npy (already on CPU) if the B_path is not found
+        if not self.B_path and self.B_matrix:
+            B_np = self.B_matrix.numpy()
+            
+            np.save(B_file, B_np)
+            self.B_path = B_file
+            # np.save(Z_file, Z_mm)
+            del self.B_matrix
         
-        B_np = self.B_matrix.numpy()
-        
-        np.save(B_file, B_np)
-        # np.save(Z_file, Z_mm)
-        del self.B_matrix
-        
+
         gc.collect()
         torch.cuda.empty_cache()
 
-        print("Step 2: B_matrix saved to disk")
-
-        # Step 6: Run GPU matrix multiplication
+        # Run GPU matrix multiplication B@Z
         gpu_matrix_multiply(
             T=T,
             D=D,
-            a_path=B_file,
+            a_path=self.B_path,
             b_path=Z_file,
             out_path=result_file,
             # tile_size=1024
         )
 
-        print("Step 3: Matrix multiplication completed")
+        print(" Matrix multiplication completed")
 
 
     def add_noise(self):
@@ -469,24 +279,24 @@ class DPOptimizer_Matrix(DPOptimizer):
             print('generation is done')
 
         # Get the noise for the current step
-        flat_tensor = self.get_correlated_step(self.current_step,T,D)
-        step__noise_correlated = self.reshape_flat_to_params(flat_tensor, self.params)
+        step_noise_correlated_flat_np = self.get_correlated_step(self.current_step,T,D)
+        step_noise_correlated = self.reshape_flat_to_params(step_noise_correlated_flat_np, self.params)
         # step__noise_correlated = self.correlated_noise_history[self.current_step] #BZ
+
         # Move the correlated noise to the same device as the model
-        step__noise_correlated = [n.to(device) for n in step__noise_correlated]
+        step_noise_correlated = [n.to(device) for n in step_noise_correlated]
         for i, p in enumerate(self.params):
             _check_processed_flag(p.summed_grad)
             
             # # --- Initialize p.noise_history if it doesn't exist ---
             if not hasattr(p, 'noise_last'):
-                p.noise_last = torch.zeros_like(step__noise_correlated[i])
+                p.noise_last = torch.zeros_like(step_noise_correlated[i])
 
-            p.grad = (p.summed_grad - p.noise_last + step__noise_correlated[i]).view_as(p)
-            p.noise_last = step__noise_correlated[i]
-            # p.grad = (p.summed_grad + noise).view_as(p)
-            # p.grad = (p.summed_grad + step_correlated[i]).view_as(p)
+            p.grad = (p.summed_grad - p.noise_last + step_noise_correlated[i]).view_as(p)
+            p.noise_last = step_noise_correlated[i]
+
             _mark_as_processed(p.summed_grad)
-        del step__noise_correlated
+        del step_noise_correlated
         self.current_step += 1
 
 

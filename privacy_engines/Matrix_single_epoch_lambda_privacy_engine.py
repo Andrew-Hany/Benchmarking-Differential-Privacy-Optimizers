@@ -32,8 +32,8 @@ from torch.utils.data import DataLoader
 from Optimizers.Matrix_optimizer._init import *
 from Optimizers.Matrix_optimizer.MatrixSGD import DPOptimizer_Matrix
 
-
-class Matrix_PrivacyEngine(PrivacyEngine):
+import numpy as np
+class Matrix_single_epoch_lambda_PrivacyEngine(PrivacyEngine):
     def __init__(self, *, accountant: str = "prv", secure_mode: bool = False):
         super().__init__(accountant=accountant, secure_mode=secure_mode)
 
@@ -356,8 +356,15 @@ class Matrix_PrivacyEngine(PrivacyEngine):
         print(T_calculated)
         
         # C_matrix_T_by_T = torch.eye(T_calculated, device='cuda').to('cpu') if torch.cuda.is_available() else torch.eye(T_calculated, device='cpu')
-        sens_C = compute_sensitivity(None)
-        B_matrix_T_by_T = torch.tril(torch.ones(T_calculated, T_calculated, device='cpu'))
+        
+        B_matrix_T_by_T, _ = get_matrix_B_and_C_single_epoch_fixed_point(T_calculated, lamda_matrix=True)
+        sens_C = compute_sensitivity(None) # This will be one
+
+        # B_matrix_T_by_T = torch.tril(torch.ones(T_calculated, T_calculated, device='cpu'))
+        B_np = B_matrix_T_by_T.numpy()
+        np.save('B_matrix.npy', B_np)
+        
+        del B_matrix_T_by_T
         return optim_class(
             optimizer=optimizer,
             noise_multiplier=noise_multiplier,
@@ -367,8 +374,8 @@ class Matrix_PrivacyEngine(PrivacyEngine):
             generator=generator,
             secure_mode=self.secure_mode,
             normalize_clipping=normalize_clipping,
-            # A_matrix= A_matrix_T_by_T,
-            B_matrix =B_matrix_T_by_T,
+            B_matrix =None,
+            B_path = 'B_matrix.npy',
             sens_C=sens_C,
             num_steps=T_calculated,
             **kwargs,

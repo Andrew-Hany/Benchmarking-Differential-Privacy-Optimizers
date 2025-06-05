@@ -144,7 +144,7 @@ def main_train_wrapper(
     print("Epsilon: {}, Delta: {}, Time Taken for Training {}".format(epsilon, delta,elapsed_time))
 
     # if model_type.lower() == 'vae':
-    generate_and_save_images(model, train_loader)
+    #     generate_and_save_images(model, train_loader)
 
     # add noise multiplier
     parameters = {
@@ -169,6 +169,7 @@ def main_train_wrapper(
     # #saving the files and the results into .pth and .json
     # saving_module = Saving()
     # results = saving_module.save_results(results_directory,model,parameters, all_train_losses, all_train_accuracies,all_test_losses,all_test_accuracies,elapsed_time)
+    return all_train_losses,all_test_losses
 
 
 def reporting_wrapper(results_directory):
@@ -186,33 +187,64 @@ def reporting_wrapper(results_directory):
 # Running the main function
 
 
+torch.cuda.empty_cache()
+all_train_losses1,all_test_losses1 = main_train_wrapper(
+    results_directory='results',
+    delta=1e-5,
+    learning_rate=0.1,
+    clip_bound=1,
+    batch_size=36,
+    num_epochs=1,
+    target_epsilon=5,
+    problem_type=2,
+    optimizer_type='Matrix_single_epoch',
+    seed=100,
+)
 
 torch.cuda.empty_cache()
+all_train_losses1,all_test_losses1 = main_train_wrapper(
+    results_directory='results',
+    delta=1e-5,
+    learning_rate=0.1,
+    clip_bound=1,
+    batch_size=36,
+    num_epochs=1,
+    target_epsilon=5,
+    problem_type=2,
+    optimizer_type='Matrix_single_epoch_lambda',
+    seed=100,
+)
+
+torch.cuda.empty_cache()
+all_train_losses2,all_test_losses2=main_train_wrapper(
+    results_directory='results',
+    delta=1e-5,
+    learning_rate=0.1,
+    clip_bound=1,
+    batch_size=36,
+    num_epochs=1,
+    target_epsilon=5,
+    problem_type=2,
+    optimizer_type='sgd',
+    seed=100,
+)
+
+# import numpy as np
+
+# print(np.allclose(all_train_losses1,all_train_losses2))
+# print(np.allclose(all_train_losses1,all_train_losses2))
 # main_train_wrapper(
 #     results_directory='results',
 #     delta=1e-5,
-#     learning_rate=0.01,
+#     learning_rate=0.0001,
 #     clip_bound=1,
-#     batch_size=1024,
-#     num_epochs=1,
-#     target_epsilon=5,
+#     batch_size=128,
+#     num_epochs=3,
+#     target_epsilon=10,
 #     problem_type=3,
-#     optimizer_type='matrix',
+#     optimizer_type='adambc',
 #     seed=100,
 # )
-
-main_train_wrapper(
-    results_directory='results',
-    delta=1e-5,
-    learning_rate=0.0001,
-    clip_bound=1,
-    batch_size=128,
-    num_epochs=3,
-    target_epsilon=10,
-    problem_type=3,
-    optimizer_type='adambc',
-    seed=100,
-)
 
 # main_train_wrapper(
 #     results_directory='results',

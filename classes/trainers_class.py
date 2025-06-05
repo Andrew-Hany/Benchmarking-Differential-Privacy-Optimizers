@@ -12,7 +12,8 @@ from abc import ABC, abstractmethod
 from Optimizers.Adam_optimizer.AdamBC import *
 from privacy_engines.Dice_privacy_engine import Dice_PrivacyEngine
 from privacy_engines.KFprivacy_engine import KF_PrivacyEngine
-from privacy_engines.Matrix_privacy_engine import Matrix_PrivacyEngine
+from privacy_engines.Matrix_single_epoch_privacy_engine import  Matrix_single_epoch_PrivacyEngine
+from privacy_engines.Matrix_single_epoch_lambda_privacy_engine import Matrix_single_epoch_lambda_PrivacyEngine
 from .training_loops import TrainingOrchestrator
 from opacus.accountants.utils import get_noise_multiplier
 import opacus
@@ -335,7 +336,7 @@ class DP_KF_train_epsilon(BaseOptimizer_trainer):
         epsilon = privacy_engine.get_epsilon(delta)
         return epsilon,noise_multiplier, all_train_losses, all_train_accuracies,all_test_losses,all_test_accuracies,elapsed_time
 
-@register_optimizer("Matrix")
+@register_optimizer("Matrix_single_epoch")
 class DP_Matrix_train_epsilon(BaseOptimizer_trainer):
     @staticmethod
     def train(
@@ -358,7 +359,66 @@ class DP_Matrix_train_epsilon(BaseOptimizer_trainer):
         verbose=False,
         **kwargs):
 
-        privacy_engine = Matrix_PrivacyEngine(
+        privacy_engine = Matrix_single_epoch_PrivacyEngine(
+            accountant=accountant,
+            # accountant='rdp',
+            secure_mode=False,  # Should be set to True for production use
+        )
+
+        noise_multiplier = get_noise_multiplier(
+                    target_epsilon=target_epsilon,
+                    target_delta=delta,
+                    sample_rate=sample_rate,
+                    epochs=num_epochs,
+                    accountant=privacy_engine.accountant.mechanism(),
+        )
+        optimizer = optim.SGD(model.parameters(), learning_rate)
+        rng = torch.Generator(device=device)
+        rng.manual_seed(int(random_seed))
+
+        model, optimizer, train_loader = privacy_engine.make_private_with_epsilon(
+            module=model,
+            optimizer=optimizer,
+            data_loader=train_loader,
+            target_epsilon=target_epsilon,
+            target_delta=delta,
+            epochs=num_epochs,
+            max_grad_norm=clip_bound,
+            noise_generator=rng,
+            loss_reduction="mean",
+            normalize_clipping = normalize_clipping,
+        )
+
+        orchestrator = TrainingOrchestrator()
+        all_train_losses, all_train_accuracies,all_test_losses,all_test_accuracies,elapsed_time = orchestrator.training_loop(model_type,num_epochs,train_loader,test_loader,model,criterion,optimizer,device,verbose=verbose)
+        epsilon = privacy_engine.get_epsilon(delta)
+        # all_train_losses, all_train_accuracies,all_test_losses,all_test_accuracies,elapsed_time =None,None,None,None,None
+        return epsilon,noise_multiplier, all_train_losses, all_train_accuracies,all_test_losses,all_test_accuracies,elapsed_time
+
+@register_optimizer("Matrix_single_epoch_lambda")
+class DP_Matrix_train_epsilon(BaseOptimizer_trainer):
+    @staticmethod
+    def train(
+        model: torch.nn.Module,
+        model_type,
+        train_loader: torch.utils.data.DataLoader,
+        test_loader:torch.utils.data.DataLoader,
+        learning_rate,
+        sample_rate,
+        criterion,
+        num_epochs: int,
+        target_epsilon: float,
+        clip_bound: float,
+        delta: float,
+        device,
+        accountant='prv',
+        normalize_clipping= False,
+        random_seed=474237,
+        
+        verbose=False,
+        **kwargs):
+
+        privacy_engine = Matrix_single_epoch_lambda_PrivacyEngine(
             accountant=accountant,
             # accountant='rdp',
             secure_mode=False,  # Should be set to True for production use

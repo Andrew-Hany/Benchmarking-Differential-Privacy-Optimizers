@@ -3,5 +3,8 @@ errorlog/
 data/
 __pycache__/
 results/
+Setup2/
+Setup1/
+Setup3/
 combinations.txt
 

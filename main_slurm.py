@@ -56,7 +56,7 @@ optimizer, learning_rate, batch_size, epsilon, seed, num_epoch, delta, clip_boun
 
 print(f"Running with hyperparameters: optimizer={optimizer}, learning_rate={learning_rate}, batch_size={batch_size}, epsilon={epsilon}, seed={seed}, num_epochs={num_epoch}, delta={delta}, clip_bound={clip_bound}, problem={problem}")
 main_train_wrapper(
-        results_directory='results',
+        results_directory='Setup2',
         delta=delta,
         learning_rate=learning_rate,
         clip_bound=clip_bound,
