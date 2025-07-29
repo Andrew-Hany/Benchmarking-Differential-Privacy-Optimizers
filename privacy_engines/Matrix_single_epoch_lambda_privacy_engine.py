@@ -49,7 +49,7 @@ class Matrix_single_epoch_lambda_PrivacyEngine(PrivacyEngine):
         max_grad_norm: Union[float, List[float]],
         batch_first: bool = True,
         loss_reduction: str = "mean",
-        poisson_sampling: bool = True,
+        poisson_sampling: bool = False,
         clipping: str = "flat",
         noise_generator=None,
         grad_sample_mode: str = "hooks",
@@ -57,104 +57,15 @@ class Matrix_single_epoch_lambda_PrivacyEngine(PrivacyEngine):
         total_steps: int = None,
         **kwargs,
     ):
-        """
-        Version of :meth:`~opacus.privacy_engine.PrivacyEngine.make_private`,
-        that calculates privacy parameters based on a given privacy budget.
-
-        For the full documentation see
-        :meth:`~opacus.privacy_engine.PrivacyEngine.make_private`
-
-        Args:
-            module: PyTorch module to be used for training
-            optimizer: Optimizer to be used for training
-            data_loader: DataLoader to be used for training
-            target_epsilon: Target epsilon to be achieved, a metric of privacy loss at differential changes in data.
-            target_delta: Target delta to be achieved. Probability of information being leaked.
-            epochs: Number of training epochs you intend to perform; noise_multiplier relies on this to calculate
-                an appropriate sigma to ensure privacy budget of (target_epsilon, target_delta) at the end
-                of epochs.
-            max_grad_norm: The maximum norm of the per-sample gradients. Any gradient with norm
-                higher than this will be clipped to this value.
-            batch_first: Flag to indicate if the input tensor to the corresponding module
-                has the first dimension representing the batch. If set to True, dimensions on
-                input tensor are expected be ``[batch_size, ...]``, otherwise
-                ``[K, batch_size, ...]``
-            loss_reduction: Indicates if the loss reduction (for aggregating the gradients)
-                is a sum or a mean operation. Can take values "sum" or "mean"
-            poisson_sampling: ``True`` if you want to use standard sampling required
-                for DP guarantees. Setting ``False`` will leave provided data_loader
-                unchanged. Technically this doesn't fit the assumptions made by
-                privacy accounting mechanism, but it can be a good approximation when
-                using Poisson sampling is unfeasible.
-            clipping: Per sample gradient clipping mechanism ("flat" or "per_layer" or "adaptive").
-                Flat clipping calculates the norm of the entire gradient over
-                all parameters, per layer clipping sets individual norms for
-                every parameter tensor, and adaptive clipping updates clipping bound per iteration.
-                Flat clipping is usually preferred, but using per layer clipping in combination
-                with distributed training can provide notable performance gains.
-            noise_generator: torch.Generator() object used as a source of randomness for
-                the noise
-            grad_sample_mode: mode for computing per sample gradients. Determines the
-                implementation class for the wrapped ``module``. See
-                :class:`~opacus.grad_sample.gsm_base.AbstractGradSampleModule` for more
-                details
-            total_steps: Instead of stepping through once the dataloader for once expected epoch,
-            we will step through it `total_steps` times. This will set the sample rate to
-            batch_size/data_size. The parameter total_steps is any positive integer.
-
-        Returns:
-            Tuple of (model, optimizer, data_loader).
-
-            Model is a wrapper around the original model that also computes per sample
-                gradients
-            Optimizer is a wrapper around the original optimizer that also does
-                gradient clipping and noise addition to the gradients
-            DataLoader is a brand new DataLoader object, constructed to behave as
-                equivalent to the original data loader, possibly with updated
-                sampling mechanism. Points to the same dataset object.
-        """
-
-        if total_steps:
-            if not poisson_sampling:
-                raise ValueError(
-                    "Setting total_steps without Poisson sampling not implemented"
-                )
-
-            if epochs is not None:
-                raise ValueError(
-                    "make_private_with_epsilon takes as input EITHER a number of steps or a number of epochs"
-                )
-
-            # we are given the number of optimizer steps instead of epochs,
-            # so we can just use sample rate q = B/N
-            sample_rate = data_loader.batch_size / len(data_loader.dataset)
-
-            noise_multiplier = get_noise_multiplier(
-                target_epsilon=target_epsilon,
-                target_delta=target_delta,
-                sample_rate=sample_rate,
-                steps=total_steps,
-                accountant=self.accountant.mechanism(),
-                **kwargs,
-            )
-        else:
-            sample_rate = 1 / len(data_loader)
-
-            noise_multiplier = get_noise_multiplier(
-                target_epsilon=target_epsilon,
-                target_delta=target_delta,
-                sample_rate=sample_rate,
-                epochs=epochs,
-                accountant=self.accountant.mechanism(),
-                **kwargs,
-            )
-
-        if len(self.accountant) > 0:
-            warnings.warn(
-                "You're calling make_private_with_epsilon with non-zero privacy budget "
-                "already spent. Returned noise_multiplier assumes zero starting point, "
-                "so your overall privacy budget will be higher."
-            )
+        # for matrix, we need to use gdp
+        noise_multiplier = get_noise_multiplier(
+            target_epsilon=target_epsilon,
+            target_delta=target_delta,
+            sample_rate=1,
+            epochs=1,
+            accountant=self.accountant.mechanism(),
+            **kwargs,
+        )
 
         return self.make_private(
             module=module,
@@ -184,72 +95,13 @@ class Matrix_single_epoch_lambda_PrivacyEngine(PrivacyEngine):
         max_grad_norm: Union[float, List[float]],
         batch_first: bool = True,
         loss_reduction: str = "mean",
-        poisson_sampling: bool = True,
+        poisson_sampling: bool = False,
         clipping: str = "flat",
         noise_generator=None,
         grad_sample_mode: str = "hooks",
         **kwargs,
     ) -> Tuple[GradSampleModule, DPOptimizer, DataLoader]:
     
-        """
-        Add privacy-related responsibilities to the main PyTorch training objects:
-        model, optimizer, and the data loader.
-
-        All of the returned objects act just like their non-private counterparts
-        passed as arguments, but with added DP tasks.
-
-        - Model is wrapped to also compute per sample gradients.
-        - Optimizer is now responsible for gradient clipping and adding noise to the gradients.
-        - DataLoader is updated to perform Poisson sampling.
-
-        Notes:
-            Using any other models, optimizers, or data sources during training
-            will invalidate stated privacy guarantees.
-
-        Args:
-            module: PyTorch module to be used for training
-            optimizer: Optimizer to be used for training
-            data_loader: DataLoader to be used for training
-            noise_multiplier: The ratio of the standard deviation of the Gaussian noise to
-                the L2-sensitivity of the function to which the noise is added
-                (How much noise to add)
-            max_grad_norm: The maximum norm of the per-sample gradients. Any gradient with norm
-                higher than this will be clipped to this value.
-            batch_first: Flag to indicate if the input tensor to the corresponding module
-                has the first dimension representing the batch. If set to True, dimensions on
-                input tensor are expected be ``[batch_size, ...]``, otherwise
-                ``[K, batch_size, ...]``
-            loss_reduction: Indicates if the loss reduction (for aggregating the gradients)
-                is a sum or a mean operation. Can take values "sum" or "mean"
-            poisson_sampling: ``True`` if you want to use standard sampling required
-                for DP guarantees. Setting ``False`` will leave provided data_loader
-                unchanged. Technically this doesn't fit the assumptions made by
-                privacy accounting mechanism, but it can be a good approximation when
-                using Poisson sampling is unfeasible.
-            clipping: Per sample gradient clipping mechanism ("flat" or "per_layer" or "adaptive").
-                Flat clipping calculates the norm of the entire gradient over
-                all parameters, per layer clipping sets individual norms for
-                every parameter tensor, and adaptive clipping updates clipping bound per iteration.
-                Flat clipping is usually preferred, but using per layer clipping in combination
-                with distributed training can provide notable performance gains.
-            noise_generator: torch.Generator() object used as a source of randomness for
-                the noise
-            grad_sample_mode: mode for computing per sample gradients. Determines the
-                implementation class for the wrapped ``module``. See
-                :class:`~opacus.grad_sample.gsm_base.AbstractGradSampleModule` for more
-                details
-
-        Returns:
-            Tuple of (model, optimizer, data_loader).
-
-            Model is a wrapper around the original model that also computes per sample
-                gradients
-            Optimizer is a wrapper around the original optimizer that also does
-             gradient clipping and noise addition to the gradients
-            DataLoader is a brand new DataLoader object, constructed to behave as
-                equivalent to the original data loader, possibly with updated
-                sampling mechanism. Points to the same dataset object.
-        """
         if noise_generator and self.secure_mode:
             raise ValueError("Passing seed is prohibited in secure mode")
 
@@ -303,9 +155,13 @@ class Matrix_single_epoch_lambda_PrivacyEngine(PrivacyEngine):
             **kwargs,
         )
 
-        optimizer.attach_step_hook(
-            self.accountant.get_optimizer_hook_fn(sample_rate=sample_rate)
-        )
+        # optimizer.attach_step_hook(
+        #     self.accountant.get_optimizer_hook_fn(sample_rate=sample_rate)
+        # )
+
+        # We log the noise once for matrix multiplication
+        self.accountant.history.append((noise_multiplier, 1, 1))
+        
         if grad_sample_mode == "ghost":
             criterion = self._prepare_criterion(
                 module=module,
@@ -353,18 +209,22 @@ class Matrix_single_epoch_lambda_PrivacyEngine(PrivacyEngine):
         # C = I (TxT)
 
         T_calculated =kwargs['epochs']*kwargs['optimizer_steps_per_epoch']
-        print(T_calculated)
+        print(kwargs['epochs'],kwargs['optimizer_steps_per_epoch'])
         
         # C_matrix_T_by_T = torch.eye(T_calculated, device='cuda').to('cpu') if torch.cuda.is_available() else torch.eye(T_calculated, device='cpu')
-        
-        B_matrix_T_by_T, _ = get_matrix_B_and_C_single_epoch_fixed_point(T_calculated, lamda_matrix=True)
-        sens_C = compute_sensitivity(None) # This will be one
 
-        # B_matrix_T_by_T = torch.tril(torch.ones(T_calculated, T_calculated, device='cpu'))
-        B_np = B_matrix_T_by_T.numpy()
-        np.save('B_matrix.npy', B_np)
-        
-        del B_matrix_T_by_T
+        B_path = f'B_{T_calculated}_lambda_matrix.npy'
+        if os.path.exists(B_path):
+            print(f"[SKIP] File already exists: {B_path}")
+        else:
+            B_matrix_T_by_T, _ = get_matrix_B_and_C_single_epoch_fixed_point(T_calculated, lamda_matrix=True)
+            sens_C = compute_sensitivity(None) # This will be one
+
+            # B_matrix_T_by_T = torch.tril(torch.ones(T_calculated, T_calculated, device='cpu'))
+            B_np = B_matrix_T_by_T.cpu().numpy()
+            np.save(B_path, B_np)
+            
+            del B_matrix_T_by_T
         return optim_class(
             optimizer=optimizer,
             noise_multiplier=noise_multiplier,
@@ -375,8 +235,8 @@ class Matrix_single_epoch_lambda_PrivacyEngine(PrivacyEngine):
             secure_mode=self.secure_mode,
             normalize_clipping=normalize_clipping,
             B_matrix =None,
-            B_path = 'B_matrix.npy',
-            sens_C=sens_C,
-            num_steps=T_calculated,
+            B_path = B_path,
+            sens_C=1,
+            lamda_matrix=True,
             **kwargs,
         )

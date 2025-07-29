@@ -99,22 +99,54 @@ class Saving:
                     data = json.load(f)
 
                     # Calculate the average loss and accuracy for the final epoch
-                    final_epoch_train_losses = data['Training_all_losses'][-1] if data['Training_all_losses'] else []
-                    final_epoch_train_accuracies = data['Training_all_accuracies'][-1] if data['Training_all_accuracies'] else []
+                    # final_epoch_train_losses = data['Training_all_losses'][-1] if data['Training_all_losses'] else []
+                    # final_epoch_train_accuracies = data['Training_all_accuracies'][-1] if data['Training_all_accuracies'] else []
 
-                    final_epoch_train_loss = np.mean(final_epoch_train_losses) if final_epoch_train_losses else None
-                    final_epoch_train_accuracy = np.mean(final_epoch_train_accuracies) if final_epoch_train_accuracies else None
+                    # final_epoch_train_loss = np.mean(final_epoch_train_losses) if final_epoch_train_losses else None
+                    # final_epoch_train_accuracy = np.mean(final_epoch_train_accuracies) if final_epoch_train_accuracies else None
+                    
+                    # Helper: extract total loss if it's a list like [total, recon, kl]
+                    def extract_total_loss(entry):
+                        return entry[0] if isinstance(entry, (list, tuple)) and len(entry) >= 1 else entry
+
+                    # Final epoch values
+                    final_epoch_train_loss = np.mean(data['Training_all_losses'][-1]) if data['Training_all_losses'] and data['Training_all_losses'][-1] else None
+                    final_epoch_train_accuracy = np.mean(data['Training_all_accuracies'][-1]) if data['Training_all_accuracies'] and data['Training_all_accuracies'][-1] else None
+                    final_epoch_test_loss = data['Testing_all_losses'][-1] if data['Testing_all_losses'] else None
+                    final_epoch_test_accuracy = data['Testing_all_accuracies'][-1] if data['Testing_all_accuracies'] else None
+
+                    # Best epoch values
+                    best_epoch_train_loss = min((extract_total_loss(l) for l in data['Training_all_losses'] if l), default=None)
+                    best_epoch_train_accuracy = max((np.mean(a) for a in data['Training_all_accuracies'] if a), default=None)
+                    best_epoch_test_loss = min((extract_total_loss(l) for l in data['Testing_all_losses']), default=None) if data['Testing_all_losses'] else None
+                    best_epoch_test_accuracy = max((a for a in data['Testing_all_accuracies']), default=None) if data['Testing_all_accuracies'] else None
+
+                    # Best epoch indices
+                    best_epoch_train_loss_idx = min(((i, extract_total_loss(l)) for i, l in enumerate(data['Training_all_losses']) if l), key=lambda x: x[1], default=(None, None))[0]
+                    best_epoch_train_accuracy_idx = max(((i, np.mean(a)) for i, a in enumerate(data['Training_all_accuracies']) if a), key=lambda x: x[1], default=(None, None))[0]
+                    best_epoch_test_loss_idx = int(np.argmin([extract_total_loss(l) for l in data['Testing_all_losses']])) if data['Testing_all_losses'] else None
+                    best_epoch_test_accuracy_idx = int(np.argmax(data['Testing_all_accuracies'])) if data['Testing_all_accuracies'] else None
+
                     row = {
                         'model_file_path': data['model_file_path'],
                         # 'Training_all_losses': data['Training_all_losses'],
                         # 'Training_all_accuracies': data['Training_all_accuracies'],
                         # 'Testing_all_losses': data['Testing_all_losses'],
                         # 'Testing_all_accuracies': data['Testing_all_accuracies'],
+                        'final_epoch_test_loss': final_epoch_test_loss,
+                        'final_epoch_test_accuracy': final_epoch_test_accuracy,
+                        'final_epoch_train_loss': final_epoch_train_loss,
+                        'final_epoch_train_accuracy': final_epoch_train_accuracy,
 
-                        'final_epoch_test_loss':data['Testing_all_losses'][-1],
-                        'final_epoch_test_accuracy': data['Testing_all_accuracies'][-1] if data['Testing_all_accuracies'] else [],
-                        'final_epoch_train_loss':final_epoch_train_loss,
-                        'final_epoch_train_accuracy':final_epoch_train_accuracy,
+                        'best_epoch_train_loss': best_epoch_train_loss,
+                        'best_epoch_train_accuracy': best_epoch_train_accuracy,
+                        'best_epoch_test_loss': best_epoch_test_loss,
+                        'best_epoch_test_accuracy': best_epoch_test_accuracy,
+
+                        'best_epoch_train_loss_idx': best_epoch_train_loss_idx,
+                        'best_epoch_train_accuracy_idx': best_epoch_train_accuracy_idx,
+                        'best_epoch_test_loss_idx': best_epoch_test_loss_idx,
+                        'best_epoch_test_accuracy_idx': best_epoch_test_accuracy_idx,
                         'elapsed_time': data['elapsed_time']
                     }
                     row.update(data['parameters'])

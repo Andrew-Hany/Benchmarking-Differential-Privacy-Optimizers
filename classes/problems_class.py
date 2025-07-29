@@ -152,7 +152,7 @@ class Problem3(ProblemDefinition):
 
     @property
     def kwargs(self):
-        return {"latent_dim": 2}
+        return {"latent_dim": 32}
 
     @property
     def model_type(self):

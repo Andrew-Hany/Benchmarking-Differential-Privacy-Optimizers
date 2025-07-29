@@ -87,8 +87,8 @@ def main_train_wrapper(
     problem_type=0,
     optimizer_type ='sgd',
     seed =474237,
-    error_max_grad_norm = 1 # for Dice Optimizer
-
+    error_max_grad_norm = 1, # for Dice Optimizer
+    accountant = 'prv'
 ):
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -133,7 +133,7 @@ def main_train_wrapper(
     clip_bound,
     delta, 
     device,
-    accountant='prv',
+    accountant=accountant,
     normalize_clipping= True,
     random_seed = seed,
     verbose=True,
@@ -177,7 +177,7 @@ def reporting_wrapper(results_directory):
     csv_file_path = saving_module.convert_json_to_csv(results_directory)
 
     hyperparameters = ["optimizer_type","problem_type","learning_rate","num_epochs","batch_size","epsilon","delta","clip_bound","seed"]
-    tracker = HyperparameterTracker(csv_file_path,hyperparameters,'/scratch/project_2003275/Andrew_temp/Benchmarking-Differential-Privacy-Optimizers/results/hyperparameters_tracking.csv')
+    tracker = HyperparameterTracker(csv_file_path,hyperparameters,'/scratch/project_2003275/Andrew_temp/Benchmarking-Differential-Privacy-Optimizers/Setup2/hyperparameters_tracking.csv')
     tracker_file_name = tracker.extract_hyperparameters()
 
     # here I should Add the visualization reports functions: These functions should call from reporting class
@@ -186,19 +186,19 @@ def reporting_wrapper(results_directory):
 # Running the main function
 
 # hyperparameters = ["optimizer_type", "problem_type", "learning_rate", "num_epochs", "batch_size", "epsilon", "delta", "clip_bound", "seed"]
-# tracker = HyperparameterTracker('/scratch/project_2003275/Andrew_temp/Benchmarking-Differential-Privacy-Optimizers/hyperparameter_combinations_generate.py',hyperparameters,'/scratch/project_2003275/Andrew_temp/Benchmarking-Differential-Privacy-Optimizers/results/hyperparameters_tracking.csv')
+# tracker = HyperparameterTracker('/scratch/project_2003275/Andrew_temp/Benchmarking-Differential-Privacy-Optimizers/hyperparameter_combinations_generate.py',hyperparameters,'/scratch/project_2003275/Andrew_temp/Benchmarking-Differential-Privacy-Optimizers/Setup2/hyperparameters_tracking.csv')
 
-# optimizer_types = ['sgd']
+# optimizer_types = ['Matrix_single_epoch','Matrix_single_epoch_lambda','sgd'] 
 # # learning_rates = np.logspace(np.log10(0.1), np.log10(0.7), num=4) #sgd
 # learning_rates = [0.001, 0.01 , 0.1  , 1.   ]
-# batch_sizes = [128, 256]
-# epsilons = [1, 5, 10]
-# seeds = [472368]
+# batch_sizes = [36,64]
+# epsilons = [1, 10]
+# seeds = [1324204]
 
-# num_epochs = [10]
+# num_epochs = [1]
 # deltas = [1e-5]
 # clip_bounds = [1]
-# problem_types = [1]
+# problem_types = [2]
 # torch.cuda.empty_cache()
 
 # for optimizer in optimizer_types:
@@ -212,7 +212,7 @@ def reporting_wrapper(results_directory):
 #                                 for seed in seeds:
 #                                     if not tracker.has_run(optimizer_type=optimizer, problem_type=problem, learning_rate=lr, num_epochs=epoch, batch_size=batch_size, epsilon=epsilon, delta=delta, clip_bound=clip_bound, seed=seed):
 #                                         main_train_wrapper(
-#                                             results_directory='results',
+#                                             results_directory='Setup2',
 #                                             delta=delta,
 #                                             learning_rate=lr,
 #                                             clip_bound=clip_bound,
@@ -223,27 +223,39 @@ def reporting_wrapper(results_directory):
 #                                             optimizer_type=optimizer,
 #                                             seed=seed,
 #                                         )
-             
+#                                         print(optimizer, epsilon, batch_size, lr, seed, epoch, problem)
 #                                     else:
 #                                         print('done before')
 #                                         print(optimizer, epsilon, batch_size, lr, seed, epoch, problem)
 
 
-# reporting_wrapper("results")
+# # reporting_wrapper("results")
 
 
 # main_train_wrapper(
-#     results_directory='results',
+#     results_directory='testing',
 #     delta=1e-5,
-#     learning_rate=0.01,
+#     learning_rate=0.5,
 #     clip_bound=1,
-#     batch_size=256,
+#     batch_size=36,
 #     num_epochs=1,
-#     target_epsilon=5,
-#     problem_type=3,
-#     optimizer_type='sgd',
-#     seed=50,
+#     target_epsilon=10,
+#     problem_type=2,
+#     optimizer_type='Matrix_single_epoch',
+#     seed=1324204,
+#     accountant='gdp'
 # )
 
-
-
+# main_train_wrapper(
+#     results_directory='testing',
+#     delta=1e-5,
+#     learning_rate=0.5,
+#     clip_bound=1,
+#     batch_size=36,
+#     num_epochs=1,
+#     target_epsilon=10,
+#     problem_type=2,
+#     optimizer_type='sgd',
+#     seed=1324204,
+#     accountant='prv'
+# )

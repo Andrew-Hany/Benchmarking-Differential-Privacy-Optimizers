@@ -87,7 +87,8 @@ def main_train_wrapper(
     problem_type=0,
     optimizer_type ='sgd',
     seed =474237,
-    error_max_grad_norm = 1 # for Dice Optimizer
+    error_max_grad_norm = 1, # for Dice Optimizer
+    accountant='prv'
 
 ):
 
@@ -133,7 +134,7 @@ def main_train_wrapper(
     clip_bound,
     delta, 
     device,
-    accountant='prv',
+    accountant=accountant,
     normalize_clipping= True,
     random_seed = seed,
     verbose=True,
@@ -143,8 +144,8 @@ def main_train_wrapper(
 
     print("Epsilon: {}, Delta: {}, Time Taken for Training {}".format(epsilon, delta,elapsed_time))
 
-    # if model_type.lower() == 'vae':
-    #     generate_and_save_images(model, train_loader)
+    if model_type.lower() == 'vae':
+        generate_and_save_images(model, train_loader)
 
     # add noise multiplier
     parameters = {
@@ -187,75 +188,116 @@ def reporting_wrapper(results_directory):
 # Running the main function
 
 
-torch.cuda.empty_cache()
-all_train_losses1,all_test_losses1 = main_train_wrapper(
-    results_directory='results',
-    delta=1e-5,
-    learning_rate=0.1,
-    clip_bound=1,
-    batch_size=36,
-    num_epochs=1,
-    target_epsilon=5,
-    problem_type=2,
-    optimizer_type='Matrix_single_epoch',
-    seed=100,
-)
+# torch.cuda.empty_cache()
 
-torch.cuda.empty_cache()
-all_train_losses1,all_test_losses1 = main_train_wrapper(
-    results_directory='results',
-    delta=1e-5,
-    learning_rate=0.1,
-    clip_bound=1,
-    batch_size=36,
-    num_epochs=1,
-    target_epsilon=5,
-    problem_type=2,
-    optimizer_type='Matrix_single_epoch_lambda',
-    seed=100,
-)
-
-torch.cuda.empty_cache()
-all_train_losses2,all_test_losses2=main_train_wrapper(
-    results_directory='results',
-    delta=1e-5,
-    learning_rate=0.1,
-    clip_bound=1,
-    batch_size=36,
-    num_epochs=1,
-    target_epsilon=5,
-    problem_type=2,
-    optimizer_type='sgd',
-    seed=100,
-)
-
-# import numpy as np
-
-# print(np.allclose(all_train_losses1,all_train_losses2))
-# print(np.allclose(all_train_losses1,all_train_losses2))
-# main_train_wrapper(
+# all_train_losses1,all_test_losses1 = main_train_wrapper(
 #     results_directory='results',
 #     delta=1e-5,
-#     learning_rate=0.0001,
-#     clip_bound=1,
-#     batch_size=128,
-#     num_epochs=3,
-#     target_epsilon=10,
-#     problem_type=3,
-#     optimizer_type='adambc',
-#     seed=100,
-# )
-
-# main_train_wrapper(
-#     results_directory='results',
-#     delta=1e-5,
-#     learning_rate=0.01,
+#     learning_rate=0.5,
 #     clip_bound=1,
 #     batch_size=1024,
 #     num_epochs=1,
-#     target_epsilon=5,
-#     problem_type=2,
-#     optimizer_type='sgd',
-#     seed=100,
+#     target_epsilon=10,
+#     problem_type=3,
+#     optimizer_type='Matrix_multi_epoch',
+#     seed=1324204,
+#     accountant='gdp'
 # )
 
+# all_train_losses1,all_test_losses1 = main_train_wrapper(
+#     results_directory='results',
+#     delta=1e-5,
+#     learning_rate=0.5,
+#     clip_bound=1,
+#     batch_size=1024,
+#     num_epochs=1,
+#     target_epsilon=10,
+#     problem_type=3,
+#     optimizer_type='Matrix_multi_epoch_lambda',
+#     seed=1324204,
+#     accountant='gdp'
+# )
+
+# all_train_losses1,all_test_losses1 = main_train_wrapper(
+#     results_directory='results',
+#     delta=1e-5,
+#     learning_rate=0.5,
+#     clip_bound=1,
+#     batch_size=1024,
+#     num_epochs=1,
+#     target_epsilon=10,
+#     problem_type=3,
+#     optimizer_type='sgd',
+#     seed=1324204,
+#     accountant='prv'
+# )
+# torch.cuda.empty_cache()
+# all_train_losses1,all_test_losses1 = main_train_wrapper(
+#     results_directory='results',
+#     delta=1e-5,
+#     learning_rate=0.1,
+#     clip_bound=1,
+#     batch_size=36,
+#     num_epochs=1,
+#     target_epsilon=5,
+#     problem_type=2,
+#     optimizer_type='Matrix_multi_epoch_lambda',
+#     seed=1324204,
+# )
+
+
+
+# all_train_losses1,all_test_losses1 = main_train_wrapper(
+#     results_directory='results',
+#     delta=1e-5,
+#     learning_rate=1,
+#     clip_bound=1,
+#     batch_size=256,
+#     num_epochs=5,
+#     target_epsilon=10,
+#     problem_type=2,
+#     optimizer_type='sgd',
+#     seed=13242043,
+#     accountant='prv'
+# )
+
+# all_train_losses1,all_test_losses1 = main_train_wrapper(
+#     results_directory='results',
+#     delta=1e-5,
+#     learning_rate=0.5,
+#     clip_bound=1,
+#     batch_size=1024,
+#     num_epochs=20,
+#     target_epsilon=10,
+#     problem_type=1,
+#     optimizer_type='Matrix_multi_epoch',
+#     seed=1324204,
+# )
+
+all_train_losses1,all_test_losses1 = main_train_wrapper(
+    results_directory='results',
+    delta=1e-5,
+    learning_rate=1,
+    clip_bound=1,
+    batch_size=32,
+    num_epochs=1,
+    target_epsilon=1,
+    problem_type=2,
+    optimizer_type='Matrix_single_epoch',
+    seed=1324204,
+    accountant='gdp'
+)
+
+# all_train_losses1,all_test_losses1 = main_train_wrapper(
+#     results_directory='results',
+#     delta=1e-5,
+#     learning_rate=1,
+#     clip_bound=1,
+#     batch_size=256,
+#     num_epochs=5,
+#     target_epsilon=10,
+#     problem_type=2,
+#     optimizer_type='DICE',
+#     seed=13242043,
+#     accountant='prv'
+# )

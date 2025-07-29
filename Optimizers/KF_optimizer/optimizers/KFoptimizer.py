@@ -39,7 +39,7 @@ class KF_DPOptimizer(DPOptimizer):
             self.kf_compute_grad_at_original = True
             c = (1 - kappa) / (gamma * kappa)
             norm_factor = math.sqrt(c**2 + (1 - c) ** 2)
-            noise_multiplier = noise_multiplier / norm_factor
+            noise_multiplier = noise_multiplier #/ norm_factor
         super().__init__(
             optimizer=optimizer,
             noise_multiplier=noise_multiplier,
